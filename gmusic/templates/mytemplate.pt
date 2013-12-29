@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Google Music Remote Player</title>
+    </head>
+    <body>
+
+        <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
+        <script type="text/javascript" src="http://cdn.brittg.com/js/knockout.js"></script>
+
+        <script type="text/javascript" charset="utf-8">
+            url = "/api/v1/song";
+            var context = null;
+            var songs = [];
+
+            function init() {
+                var timer = setInterval(updateStatus, 150);
+
+                $.ajax({
+                    url: '/api/v1/songs',
+                    success: function(data) {
+                        songs = [];
+                        for (var x in data) {
+                            songs.push(new Song(data[x]));
+                        }
+                        ViewModel.songs(songs);
+                    }
+                });
+
+                try {
+                    window.AudioContext = window.AudioContext||window.webkitAudioContext;
+                    context = new AudioContext();
+                }
+                catch(e) {
+                    alert('Web Audio API is not supported in this browser');
+                }
+            }
+
+            function downloadSong(id) {
+                var request = new XMLHttpRequest();
+                request.open('GET', url + "?song_id=" + id, true);
+                request.responseType = 'arraybuffer';
+
+                request.onload = function() {
+                    context.decodeAudioData(request.response, function(buffer) {
+                        currentSongBuffer = buffer;
+                        for (var x in ViewModel.queue()) {
+                            if (ViewModel.queue()[x].id == id) {
+                                ViewModel.queue()[x].buffer = buffer;
+                                break;
+                            }
+                        }
+                    }, function() {
+                        console.warn("Error Loading Buffer");
+                    });
+                }
+                request.send();
+            }
+
+            var volumeDown = function(source) {
+                source.gain.value -= .05;
+                if (source.gain.value > 0) {
+                    setTimeout(function() { volumeDown(source);}, 50);
+                } else {
+                    source.disconnect();
+                }
+            }
+
+            var sources = [];
+            function playBuffer(buffer, delay_play) {
+                if (delay_play <= 0) {
+                    delay_play = 0;
+                    for (var x in sources) {
+                        volumeDown(sources.pop()['source']);
+                    }
+                }
+                var source = context.createBufferSource();
+                source.buffer = buffer;
+                source.connect(context.destination);
+                source.start(context.currentTime + delay_play);
+                var start_time = context.currentTime + delay_play;
+                ViewModel.currentSong().start = start_time;
+                ViewModel.currentSong().position = function() {
+                    return context.currentTime - ViewModel.currentSong().start;
+                }
+                sources.push({source: source, start: start_time});
+            }
+
+            function updateStatus() {
+                now = context.currentTime;
+
+                if (ViewModel.currentSong() && ViewModel.currentSong().start !== false && ViewModel.playStatus() == "playing") {
+                    if (now - ViewModel.currentSong().start > ViewModel.currentSong().buffer.duration - 1) {
+                        if (ViewModel.queue().length > 0 && ViewModel.queue()[0].buffer && !ViewModel.queue()[0].locked) {
+                            ViewModel.queue()[0].locked = true;
+                            currentEnd = ViewModel.currentSong().start + ViewModel.currentSong().buffer.duration - .1;
+                            delay = currentEnd - context.currentTime;
+                            ViewModel.currentSong(ViewModel.queue().shift());
+                            playBuffer(ViewModel.currentSong().buffer, delay);
+                        }
+                    } 
+                    if (now - ViewModel.currentSong().start > (ViewModel.currentSong().buffer.duration)) {
+                        ViewModel.currentSong(null);
+                        ViewModel.playStatus("stopped");
+                    }
+                }
+
+                if (ViewModel.currentSong() == null && ViewModel.queue().length > 0) {
+                    if (ViewModel.queue()[0].buffer) {
+                        ViewModel.currentSong(ViewModel.queue().shift());
+                    }
+                }
+
+                if (ViewModel.currentSong() && !ViewModel.currentSong().locked && ViewModel.playStatus() == 'stopped') {
+                    ViewModel.playStatus("playing");
+                    playBuffer(ViewModel.currentSong().buffer, 0);
+                }
+
+                buffers = 0;
+                maxBuffers = 2;
+                for (var x in ViewModel.queue()) {
+                    if (buffers >= maxBuffers) {
+                        break;
+                    }
+                    if (!ViewModel.queue()[x].buffer) {
+                        if (!ViewModel.queue()[x].gettingBuffer) {
+                            if (!ViewModel.currentSong() ) {
+                                ViewModel.queue()[x].gettingBuffer = true;
+                                downloadSong(ViewModel.queue()[x].id);
+                            } else if (ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration > .5) {
+                                ViewModel.queue()[x].gettingBuffer = true;
+                                downloadSong(ViewModel.queue()[x].id);
+                            }
+                            break;
+                        }
+                    }
+                    buffers += 1;
+                }
+            }
+
+            $(document).ready(init);
+        </script>
+
+        <table border="0">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Title</th>
+                    <th>Artist</th>
+                    <th>Album</th>
+                    <th>Duration</th>
+                    <th>Genre</th>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: songs">
+                <tr>
+                    <td data-bind="click: play"><a href="#">Play</a></td>
+                    <td data-bind="text: title"></td>
+                    <td data-bind="text: artist"></td>
+                    <td data-bind="text: album"></td>
+                    <td><span data-bind="text: minutes"></span>:<span data-bind="text: seconds"></span></td>
+                    <td data-bind="text: genre"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <script type="text/javascript" charset="utf-8">
+            var viewModel = function() {
+                var me = this;
+                me.songs = ko.observableArray([]);
+                me.currentSong = ko.observable(null);
+                me.queue = ko.observableArray([]);
+                me.playStatus = ko.observable("stopped");
+                me.addToQueue = function(id) {
+                    me.queue.push({
+                        'id': id,
+                        'buffer': null,
+                        'gettingBuffer': false,
+                        'start': false,
+                        'locked': false,
+                    });
+                }
+            }
+
+            var Song = function(obj) {
+                var me = this;
+                me.id = obj.id;
+
+                me.title = obj.name;
+                me.artist = obj.artist;
+                me.album = obj.album;
+                me.genre = obj.genre;
+                me.duration = obj.durationMillis;
+                me.minutes = ~~(obj.durationMillis / 60000);
+                me.seconds = ("00" + obj.durationMillis % 60).slice(-2);
+
+                me.albumart = obj.albumArtUrl;
+                me.artistart = obj.artistImageBaseUrl;
+
+                me.artist_id = obj.artistMatchedId;
+                me.album_id = obj.albumMatchedId;
+
+                me.play = function() {
+                    ViewModel.addToQueue(me.id);
+                }
+            }
+
+            ViewModel = new viewModel();
+            ko.applyBindings(ViewModel);
+        </script>
+
+    </body>
+</html>
