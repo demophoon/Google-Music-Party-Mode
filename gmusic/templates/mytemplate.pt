@@ -3,19 +3,103 @@
     <head>
         <meta charset="UTF-8">
         <title>Google Music Remote Player</title>
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap-theme.min.css">
+        <style type='text/css'>
+            body {
+                background-color: #eee;
+                padding-bottom: 110px;
+            }
+            .controls {
+                white-space: nowrap;
+                width: 55px;
+            }
+            .glyphicon {
+                color: #333;
+            }
+            .glyphicon:hover {
+                color: #666;
+            }
+            .playing .glyphicon {
+                color: #fff;
+            }
+            .playing .glyphicon:hover {
+                color: #aaa;
+            }
+            .playing {
+                background-color: #333;
+                color: #fff;
+            }
+            .playing:hover {
+                background-color: #666;
+                color: #fff;
+            }
+            #albumArt {
+                position: fixed;
+                z-index: 11;
+                bottom: 0px;
+                left: 0px;
+                width: 100px;
+                height: 100px;
+                background: #ccc;
+            }
+            #albumArt img {
+                width: 100px;
+                height: 100px;
+            }
+            #currentSong {
+                position: fixed;
+                z-index: 10;
+                bottom: 0px;
+                padding-left: 110px;
+                left: 0px;
+                background: -webkit-canvas(fft);
+                background-repeat: no-repeat;
+                background-color: #999;
+                height: 75px;
+                width: 100%;
+                color: #222;
+            }
+            #songPosition {
+                position: fixed;
+                z-index: 10;
+                bottom: 75px;
+                padding-left: 100px;
+                left: 0px;
+                height: 5px;
+                width: 100%;
+                background-color: #666;
+            }
+            #songPosition div {
+                height: 100%;
+                background-color: #28caff;
+            }
+            #currentSong #title {
+                font-weight: bold;
+                font-size: 30px;
+            }
+            #currentSong #artist, #currentSong #album {
+                font-size: 18px;
+            }
+        </style>
+        <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
+        <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.3.0/knockout-min.js"></script>
+        <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script>
     </head>
     <body>
 
-        <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
-        <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.3.0/knockout-min.js"></script>
 
         <script type="text/javascript" charset="utf-8">
             url = "/api/v1/song";
             var context = null;
             var songs = [];
 
+            var analyser = null;
+            var canvas = null;
+            var ctx = null;
+
             function init() {
-                var timer = setInterval(updateStatus, 150);
+                var timer = setInterval(updateStatus, 250);
 
                 $.ajax({
                     url: '/api/v1/songs',
@@ -28,13 +112,35 @@
                     }
                 });
 
+                window.requestAnimFrame = (function(){
+                    return  window.requestAnimationFrame       ||
+                            window.webkitRequestAnimationFrame ||
+                            window.mozRequestAnimationFrame    ||
+                            function( callback ){
+                                window.setTimeout(callback, 1000 / 60);
+                            };
+                })();
+
                 try {
                     window.AudioContext = window.AudioContext||window.webkitAudioContext;
                     context = new AudioContext();
+                    analyser = context.createAnalyser();
+                    analyser.connect(context.destination);
                 }
                 catch(e) {
                     alert('Web Audio API is not supported in this browser');
                 }
+
+                canvas = {
+                    height: 75,
+                    width: $(window).width(),
+                }
+                ctx = document.getCSSCanvasContext("2d", "fft", $(window).width(), 75);
+
+                (function animloop() {
+                    requestAnimFrame(animloop);
+                    analyseAudio();
+                })();
             }
 
             function downloadSong(id) {
@@ -77,14 +183,25 @@
                 }
                 var source = context.createBufferSource();
                 source.buffer = buffer;
-                source.connect(context.destination);
+                source.connect(analyser);
                 source.start(context.currentTime + delay_play);
                 var start_time = context.currentTime + delay_play;
                 ViewModel.currentSong().start = start_time;
                 ViewModel.currentSong().position = function() {
                     return context.currentTime - ViewModel.currentSong().start;
-                }
+                };
                 sources.push({source: source, start: start_time});
+            }
+
+            function analyseAudio() {
+                var FFTArray = new Float32Array(1024);
+                analyser.getFloatFrequencyData(FFTArray);
+                ctx.clearRect(0,0,canvas.width,canvas.height);
+                ctx.fillStyle = "#f1f1f1";
+                for (var x=0; x<FFTArray.length; x+=1) {
+                    // ctx.fillRect((x/FFTArray.length)*canvas.width,canvas.height,FFTArray.length/canvas.width,(FFTArray[x]+200)*-2);
+                    ctx.fillRect(100+(x/FFTArray.length)*canvas.width,canvas.height,3,(FFTArray[x]+75)*-2);
+                }
             }
 
             function updateStatus() {
@@ -104,6 +221,7 @@
                         ViewModel.currentSong(null);
                         ViewModel.playStatus("stopped");
                     }
+                    ViewModel.calculatedPosition(ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration);
                 }
 
                 if (ViewModel.currentSong() == null && ViewModel.queue().length > 0) {
@@ -142,58 +260,77 @@
             $(document).ready(init);
         </script>
 
-        <table border="0">
-            <thead>
-                <tr>
-                    <th></th>
-                    <th>Title</th>
-                    <th>Artist</th>
-                    <th>Album</th>
-                    <th>Duration</th>
-                    <th>Genre</th>
-                </tr>
-            </thead>
-            <tbody data-bind="foreach: songs">
-                <tr>
-                    <td>
-                        <a href="#" data-bind="click: play">Play</a>
-                        <a href="#" data-bind="click: playNext">Play Next</a>
-                        <a href="#" data-bind="click: addToQueue">Add to Queue</a>
-                    </td>
-                    <td data-bind="text: title"></td>
-                    <td data-bind="text: artist"></td>
-                    <td data-bind="text: album"></td>
-                    <td><span data-bind="text: minutes"></span>:<span data-bind="text: seconds"></span></td>
-                    <td data-bind="text: genre"></td>
-                </tr>
-            </tbody>
-        </table>
+        <span id='albumArt' data-bind="if: currentSong">
+            <img data-bind="attr: { src: currentSong().song.albumart }" />
+        </span>
+        <div id='songPosition' data-bind="if: currentSong">
+            <div data-bind="style: { width: (calculatedPosition() * 100) + '%' }"></div>
+        </div>
+        <div id='currentSong' data-bind="if: currentSong">
+            <span id="metadata">
+                <span id="title" data-bind="text: currentSong().song.title"></span><br>
+                <span id="artist" data-bind="text: currentSong().song.artist"></span> - 
+                <span id="album" data-bind="text: currentSong().song.album"></span>
+            </span>
+        </div>
+        <div id='queuedSongs'></div>
+        <div id="musicPicker">
+            <table class="table table-condensed">
+                <thead>
+                    <tr>
+                        <th class='controls'></th>
+                        <th>Title</th>
+                        <th>Artist</th>
+                        <th>Album</th>
+                        <th>Duration</th>
+                        <th>Genre</th>
+                    </tr>
+                </thead>
+                <tbody data-bind="foreach: songs">
+                    <tr data-bind="attr: { class: isPlaying }">
+                        <td class='controls'>
+                            <a href="#" alt="Play" data-bind="click: play"><span class="glyphicon glyphicon-play"></span></a>
+                            <a href="#" alt="Add to Queue" data-bind="click: addToQueue"><span class="glyphicon glyphicon-plus"></span></a>
+                            <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-chevron-right"></span></a>
+                        </td>
+                        <td data-bind="text: title"></td>
+                        <td data-bind="text: artist"></td>
+                        <td data-bind="text: album"></td>
+                        <td><span data-bind="text: minutes"></span>:<span data-bind="text: seconds"></span></td>
+                        <td data-bind="text: genre"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <script type="text/javascript" charset="utf-8">
             var viewModel = function() {
                 var me = this;
                 me.songs = ko.observableArray([]);
 
+                me.calculatedPosition = ko.observable(0);
+
                 me.currentSong = ko.observable(null);
                 me.queue = ko.observableArray([]);
                 me.playStatus = ko.observable("stopped");
                 me.playNext = function(id) {
-                    me.queue.unshift({
-                        'id': id,
-                        'buffer': null,
-                        'gettingBuffer': false,
-                        'start': false,
-                        'locked': false,
-                    });
+                    me.queue.unshift(me.generate_queue_object(id));
                 }
                 me.addToQueue = function(id) {
-                    me.queue.push({
+                    me.queue.push(me.generate_queue_object(id));
+                }
+                me.generate_queue_object = function(id) {
+                    var song = ko.utils.arrayFirst(me.songs(), function(item) {
+                        return item.id == id;
+                    })
+                    return {
                         'id': id,
+                        'song': song,
                         'buffer': null,
                         'gettingBuffer': false,
                         'start': false,
                         'locked': false,
-                    });
+                    };
                 }
 
             }
@@ -213,13 +350,20 @@
                 me.genre = obj.genre;
                 me.duration = obj.durationMillis;
                 me.minutes = ~~(obj.durationMillis / 60000);
-                me.seconds = ("00" + obj.durationMillis % 60).slice(-2);
+                me.seconds = ("00" + (obj.durationMillis / 1000) % 60).slice(-2);
 
                 me.albumart = obj.albumArtUrl;
                 me.artistart = obj.artistImageBaseUrl;
 
                 me.artist_id = obj.artistMatchedId;
                 me.album_id = obj.albumMatchedId;
+
+                me.isPlaying = ko.computed(function() {
+                    if (ViewModel.currentSong()) {
+                        return ViewModel.currentSong().id == me.id ? "playing" : "";
+                    }
+                    return "";
+                });
 
                 me.addToQueue = function() {
                     ViewModel.addToQueue(me.id);
