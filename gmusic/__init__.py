@@ -15,14 +15,14 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
-
 gm = Webclient()
-cache_dir = "./cache/"
+check_username = lambda: False
 
 
 @cache_region("long_term")
 def get_song(song_id):
-    f = NamedTemporaryFile(prefix=song_id + str(time.time()), suffix='.mp3', delete=True)
+    f = NamedTemporaryFile(prefix=song_id + str(time.time()),
+                           suffix='.mp3', delete=True)
     f.write(gm.get_stream_audio(song_id))
     return FileResponse(f.name)
 
@@ -45,7 +45,11 @@ def get_playlist_songs(playlist_id):
 def main(global_config, **settings):
     """ This function returns a Pyramid WSGI application.
     """
+    global check_username
 
+    check_username = lambda username, password:\
+        settings['gmusicapi_username'] == username and\
+        settings['gmusicapi_password'] == password
     if not gm.login(settings['gmusicapi_username'],
                     settings['gmusicapi_password']):
         logger.warn("Unable to login to Google Music!")

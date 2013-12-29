@@ -7,7 +7,7 @@
     <body>
 
         <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
-        <script type="text/javascript" src="http://cdn.brittg.com/js/knockout.js"></script>
+        <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.3.0/knockout-min.js"></script>
 
         <script type="text/javascript" charset="utf-8">
             url = "/api/v1/song";
@@ -155,7 +155,11 @@
             </thead>
             <tbody data-bind="foreach: songs">
                 <tr>
-                    <td data-bind="click: play"><a href="#">Play</a></td>
+                    <td>
+                        <a href="#" data-bind="click: play">Play</a>
+                        <a href="#" data-bind="click: playNext">Play Next</a>
+                        <a href="#" data-bind="click: addToQueue">Add to Queue</a>
+                    </td>
                     <td data-bind="text: title"></td>
                     <td data-bind="text: artist"></td>
                     <td data-bind="text: album"></td>
@@ -169,9 +173,19 @@
             var viewModel = function() {
                 var me = this;
                 me.songs = ko.observableArray([]);
+
                 me.currentSong = ko.observable(null);
                 me.queue = ko.observableArray([]);
                 me.playStatus = ko.observable("stopped");
+                me.playNext = function(id) {
+                    me.queue.unshift({
+                        'id': id,
+                        'buffer': null,
+                        'gettingBuffer': false,
+                        'start': false,
+                        'locked': false,
+                    });
+                }
                 me.addToQueue = function(id) {
                     me.queue.push({
                         'id': id,
@@ -181,6 +195,12 @@
                         'locked': false,
                     });
                 }
+
+            }
+
+            var Artist = function(obj) {
+                var me = this;
+                me.id = obj.id
             }
 
             var Song = function(obj) {
@@ -201,8 +221,18 @@
                 me.artist_id = obj.artistMatchedId;
                 me.album_id = obj.albumMatchedId;
 
-                me.play = function() {
+                me.addToQueue = function() {
                     ViewModel.addToQueue(me.id);
+                }
+
+                me.play = function() {
+                    ViewModel.playNext(me.id);
+                    ViewModel.currentSong(null);
+                    ViewModel.playStatus("stopped");
+                }
+
+                me.playNext = function() {
+                    ViewModel.playNext(me.id);
                 }
             }
 
