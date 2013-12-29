@@ -1,7 +1,9 @@
 import logging
+import time
 from tempfile import NamedTemporaryFile
 
 from pyramid.config import Configurator
+from pyramid.response import FileResponse
 from pyramid_beaker import set_cache_regions_from_settings
 from beaker.cache import cache_region
 from sqlalchemy import engine_from_config
@@ -18,12 +20,11 @@ gm = Webclient()
 cache_dir = "./cache/"
 
 
-@cache_region("default_term")
+@cache_region("long_term")
 def get_song(song_id):
-    f = NamedTemporaryFile(prefix=song_id, suffix='.mp3', delete=True)
-    stream = gm.get_stream_audio(song_id)
-    f.write(stream)
-    return f.name
+    f = NamedTemporaryFile(prefix=song_id + str(time.time()), suffix='.mp3', delete=True)
+    f.write(gm.get_stream_audio(song_id))
+    return FileResponse(f.name)
 
 
 @cache_region("default_term")

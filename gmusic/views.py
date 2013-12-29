@@ -1,6 +1,4 @@
 from pyramid.view import view_config
-from pyramid.response import FileResponse
-from beaker.cache import cache_region
 
 from gmusic import (
     get_all_songs,
@@ -11,11 +9,6 @@ from gmusic import (
 from .models import (
     DBSession,
 )
-
-
-@cache_region("long_term")
-def get_song_from_cache(id):
-    return FileResponse(get_song(id))
 
 
 @view_config(route_name='api_get_all_songs', renderer="json")
@@ -29,7 +22,7 @@ def api_get_all_songs(request):
 def api_get_song(request):
     id = request.params.get("song_id")
     if id:
-        response = get_song_from_cache(id)
+        response = get_song(id)
         return response
     return False
 
