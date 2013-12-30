@@ -388,10 +388,20 @@
         </div>
 
         <div id="musicPicker">
+
+            <center>
+                <input type='text' class='form-control' data-bind="value: search, valueUpdate: 'afterkeydown'" placeholder='Search' />
+                <ul class="pagination">
+                    <li><a href="#" data-bind="click: prevPage">&laquo;</a></li>
+                    <li><a href="#" data-bind="click: nextPage">&raquo;</a></li>
+                </ul>
+            </center>
+
             <table class="table table-condensed">
                 <thead>
                     <tr>
                         <th class='controls'></th>
+                        <th>#</th>
                         <th>Title</th>
                         <th>Artist</th>
                         <th>Album</th>
@@ -399,13 +409,14 @@
                         <th>Genre</th>
                     </tr>
                 </thead>
-                <tbody data-bind="foreach: songs">
+                <tbody data-bind="foreach: visibleSongs">
                     <tr data-bind="attr: { class: isPlaying }">
                         <td class='controls'>
                             <a href="#" alt="Play" data-bind="click: play"><span class="glyphicon glyphicon-play"></span></a>
                             <a href="#" alt="Add to Queue" data-bind="click: addToQueue"><span class="glyphicon glyphicon-plus"></span></a>
                             <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-chevron-right"></span></a>
                         </td>
+                        <td data-bind="text: track"></td>
                         <td data-bind="text: title"></td>
                         <td data-bind="text: artist"></td>
                         <td data-bind="text: album"></td>
@@ -420,6 +431,45 @@
             var viewModel = function() {
                 var me = this;
                 me.songs = ko.observableArray([]);
+
+                me.search = ko.observable('');
+
+                me.page = ko.observable(0);
+                me.maxSongsPerPage = ko.observable(100);
+                me.visibleSongs = ko.computed(function() {
+                    var ret = [];
+                    if (me.search() == '') {
+                        for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < me.songs().length; x+=1) {
+                            ret.push(me.songs()[x]);
+                        }
+                    } else {
+                        var rexp = RegExp(me.search(), "gi");
+                        for (var x=0; x<me.songs().length && ret.length<me.maxSongsPerPage(); x+=1) {
+                            var song = me.songs()[x];
+                            if (song.title.match(rexp) || song.artist.match(rexp) || song.album.match(rexp) || song.genre.match(rexp)) {
+                                ret.push(me.songs()[x]);
+                            }
+                        }
+                    }
+                    ret.sort(function(a, b) {
+                        asort = a.artist + a.album + ("00000" + a.track).slice(-5);
+                        bsort = b.artist + b.album + ("00000" + b.track).slice(-5);
+                        return asort > bsort ? 1 : bsort > asort ? -1 : 0;
+                    });
+                    return ret;
+                });
+
+                me.nextPage = function() {
+                    if ((me.page() + 1) * me.maxSongsPerPage() <= me.songs().length) {
+                        me.page(me.page() + 1);
+                    }
+                }
+
+                me.prevPage = function() {
+                    if ((me.page() - 1) * me.maxSongsPerPage() >= 0) {
+                        me.page(me.page() - 1);
+                    }
+                }
 
                 me.calculatedPosition = ko.observable(0);
 
@@ -470,6 +520,7 @@
                 me.title = obj.name;
                 me.artist = obj.artist;
                 me.album = obj.album;
+                me.track = obj.track;
                 me.genre = obj.genre;
                 me.duration = obj.durationMillis;
                 me.minutes = ~~(obj.durationMillis / 60000);
@@ -509,7 +560,7 @@
                 }
             }
 
-            ViewModel = new viewModel();
+            var ViewModel = new viewModel();
             ko.applyBindings(ViewModel);
         </script>
 
