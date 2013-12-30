@@ -357,12 +357,15 @@
             </span>
         </div>
 
-        <div id='queuedSongs' data-bind="foreach: queue">
-            <table cellspacing='0' data-bind="style: { opacity: song.locked ? .5 : 1 }">
-                <tbody id="song">
+        <div id='queuedSongs'>
+            <div data-bind="if: queue().length == 0">
+                <center><button class="btn btn-primary" data-bind="click: function() { ViewModel.populateQueue(10); }">Add 10 Random Songs To Queue</button></center>
+            </div>
+            <table cellspacing='0'>
+                <tbody id="song" data-bind="foreach: queue">
                     <tr>
                         <td rowspan=4>
-                            <img id="queuedAlbumArt" data-bind="attr: { src: song.albumart }" />
+                            <img id="queuedAlbumArt" data-bind="click: song.removeFromQueue, attr: { src: song.albumart }" />
                         </td>
                     </tr>
                     <tr>
@@ -432,6 +435,13 @@
                 me.addToQueue = function(id) {
                     me.queue.push(me.generate_queue_object(id));
                 }
+
+                me.populateQueue = function(x) {
+                    for (var i=0; i<x; i++) {
+                        me.addToQueue(me.songs()[~~(Math.random() * me.songs().length)].id)
+                    }
+                }
+
                 me.generate_queue_object = function(id) {
                     var song = ko.utils.arrayFirst(me.songs(), function(item) {
                         return item.id == id;
@@ -480,6 +490,12 @@
 
                 me.addToQueue = function() {
                     ViewModel.addToQueue(me.id);
+                }
+
+                me.removeFromQueue = function() {
+                    ViewModel.queue.remove(function(item) {
+                        return item.id == me.id;
+                    });
                 }
 
                 me.play = function() {
