@@ -34,6 +34,10 @@
                 background-color: #666;
                 color: #fff;
             }
+            #musicPicker {
+                margin-left: 300px;
+                padding-right: 10px;
+            }
             #albumArt {
                 position: fixed;
                 z-index: 11;
@@ -55,7 +59,7 @@
                 left: 0px;
                 background: -webkit-canvas(fft);
                 background-repeat: no-repeat;
-                background-color: #999;
+                background-color: #ccc;
                 height: 75px;
                 width: 100%;
                 color: #222;
@@ -72,7 +76,7 @@
             }
             #songPosition div {
                 height: 100%;
-                background-color: #28caff;
+                background-color: #33B5E5;
             }
             #currentSong #title {
                 font-weight: bold;
@@ -80,6 +84,41 @@
             }
             #currentSong #artist, #currentSong #album {
                 font-size: 18px;
+            }
+            #queuedSongs {
+                border-right: 1px solid #ddd;
+                position: fixed;
+                z-index: 9;
+                top: 0px;
+                left: 0px;
+                height: 100%;
+                width: 300px;
+                background: #ccc;
+                padding: 5px;
+            }
+            #queuedSongs #title {
+                font-size: 18px;
+                font-weight: 400;
+            }
+            #queuedSongs #artist, #queuedSongs #album {
+                font-size: 12px;
+            }
+            #queuedSongs #song {
+                overflow: hidden;
+                height: 70px;
+            }
+            #queuedSongs #metadata {
+                display: inline-block;
+                white-space: nowrap;
+                height: 45px;
+            }
+            #queuedSongs #queuedAlbumArt {
+                height: 70px;
+                width: 70px;
+                margin-right: 7px;
+            }
+            .clear {
+                both: clear;
             }
         </style>
         <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
@@ -98,8 +137,48 @@
             var canvas = null;
             var ctx = null;
 
+            function scrollLeft(obj) {
+                this.obj = obj;
+                console.log(obj);
+            }
+            scrollLeft.prototype = {
+                reset: function() {
+                    var that = this;
+                    $(that.obj).scrollLeft(0);
+                    $(that.obj).animate({opacity: 1}, 500, 'linear');
+                    setTimeout(function() { that.scroll() }, 5500);
+                },
+                fadeOut: function() {
+                    var that = this;
+                    $(that.obj).animate({opacity: 0}, 500, 'linear', function() {
+                        setTimeout(function() { that.reset(); }, 500);
+                    });
+                },
+                scroll: function() {
+                    var that = this;
+                    var scroll_amount = $(that.obj)[0].scrollWidth-$(that.obj).outerWidth();
+                    $(that.obj).animate({scrollLeft: scroll_amount}, scroll_amount*75, 'linear');
+                    setTimeout(function() { that.fadeOut(); }, scroll_amount*75 + 3500);
+                },
+            }
+
+            ko.bindingHandlers.marquee = {
+                init: function(elem, valueAccessor) {
+                    console.log($(elem)[0].scrollWidth, $(elem).outerWidth());
+                        new scrollLeft(elem).scroll();
+                    if($(elem)[0].scrollWidth>$(elem).outerWidth()){
+                    }
+                }
+            }
+
             function init() {
                 var timer = setInterval(updateStatus, 250);
+
+                $('.marquee').each(function(key, item){
+                    if($(item)[0].scrollWidth>$(item).outerWidth()){
+                        new scrollLeft(item).scroll();
+                    }
+                });
 
                 $.ajax({
                     url: '/api/v1/songs',
@@ -196,8 +275,12 @@
             function analyseAudio() {
                 var FFTArray = new Float32Array(1024);
                 analyser.getFloatFrequencyData(FFTArray);
-                ctx.clearRect(0,0,canvas.width,canvas.height);
-                ctx.fillStyle = "#f1f1f1";
+                //ctx.clearRect(0,0,canvas.width,canvas.height);
+                ctx.globalAlpha = .1;
+                ctx.fillStyle = ViewModel.backgroundColor();
+                ctx.fillRect(0,0,canvas.width,canvas.height);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = ViewModel.primaryColor();
                 for (var x=0; x<FFTArray.length; x+=1) {
                     // ctx.fillRect((x/FFTArray.length)*canvas.width,canvas.height,FFTArray.length/canvas.width,(FFTArray[x]+200)*-2);
                     ctx.fillRect(100+(x/FFTArray.length)*canvas.width,canvas.height,3,(FFTArray[x]+75)*-2);
@@ -209,11 +292,11 @@
 
                 if (ViewModel.currentSong() && ViewModel.currentSong().start !== false && ViewModel.playStatus() == "playing") {
                     if (now - ViewModel.currentSong().start > ViewModel.currentSong().buffer.duration - 1) {
-                        if (ViewModel.queue().length > 0 && ViewModel.queue()[0].buffer && !ViewModel.queue()[0].locked) {
-                            ViewModel.queue()[0].locked = true;
+                        if (ViewModel.queue().length > 0 && ViewModel.queue()[0].buffer && !ViewModel.queue()[0].locked()) {
+                            ViewModel.queue()[0].locked(true);
                             currentEnd = ViewModel.currentSong().start + ViewModel.currentSong().buffer.duration - .1;
                             delay = currentEnd - context.currentTime;
-                            ViewModel.currentSong(ViewModel.queue().shift());
+                            ViewModel.currentSong(ViewModel.queue.shift());
                             playBuffer(ViewModel.currentSong().buffer, delay);
                         }
                     } 
@@ -226,11 +309,11 @@
 
                 if (ViewModel.currentSong() == null && ViewModel.queue().length > 0) {
                     if (ViewModel.queue()[0].buffer) {
-                        ViewModel.currentSong(ViewModel.queue().shift());
+                        ViewModel.currentSong(ViewModel.queue.shift());
                     }
                 }
 
-                if (ViewModel.currentSong() && !ViewModel.currentSong().locked && ViewModel.playStatus() == 'stopped') {
+                if (ViewModel.currentSong() && !ViewModel.currentSong().locked() && ViewModel.playStatus() == 'stopped') {
                     ViewModel.playStatus("playing");
                     playBuffer(ViewModel.currentSong().buffer, 0);
                 }
@@ -264,16 +347,43 @@
             <img data-bind="attr: { src: currentSong().song.albumart }" />
         </span>
         <div id='songPosition' data-bind="if: currentSong">
-            <div data-bind="style: { width: (calculatedPosition() * 100) + '%' }"></div>
+            <div data-bind="style: { width: (calculatedPosition() * 100) + '%', backgroundColor: primaryColor }"></div>
         </div>
         <div id='currentSong' data-bind="if: currentSong">
             <span id="metadata">
                 <span id="title" data-bind="text: currentSong().song.title"></span><br>
-                <span id="artist" data-bind="text: currentSong().song.artist"></span> - 
+                <span id="artist" data-bind="text: currentSong().song.artist"></span>&nbsp;&mdash;&nbsp;
                 <span id="album" data-bind="text: currentSong().song.album"></span>
             </span>
         </div>
-        <div id='queuedSongs'></div>
+
+        <div id='queuedSongs' data-bind="foreach: queue">
+            <table cellspacing='0' data-bind="style: { opacity: song.locked ? .5 : 1 }">
+                <tbody id="song">
+                    <tr>
+                        <td rowspan=4>
+                            <img id="queuedAlbumArt" data-bind="attr: { src: song.albumart }" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span id="title" data-bind="text: song.title"></span><br>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span id="artist" data-bind="text: song.artist"></span><br>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <span id="album" data-bind="text: song.album"></span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
         <div id="musicPicker">
             <table class="table table-condensed">
                 <thead>
@@ -310,6 +420,9 @@
 
                 me.calculatedPosition = ko.observable(0);
 
+                me.primaryColor = ko.observable("#33B5E5");
+                me.backgroundColor = ko.observable("#cccccc");
+
                 me.currentSong = ko.observable(null);
                 me.queue = ko.observableArray([]);
                 me.playStatus = ko.observable("stopped");
@@ -329,7 +442,7 @@
                         'buffer': null,
                         'gettingBuffer': false,
                         'start': false,
-                        'locked': false,
+                        'locked': ko.observable(false),
                     };
                 }
 

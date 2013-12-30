@@ -62,7 +62,7 @@ def api_get_all_songs(request):
     page = int(request.params.get("page", 1)) - 1
     items = int(request.params.get("items", 1000))
     songs = []
-    songs = get_all_songs() #[page * items:(page + 1) * items]
+    songs = get_all_songs()#[page * items:(page + 1) * items]
     return songs
 
 
