@@ -34,7 +34,12 @@ def get_all_songs():
 
 @cache_region("default_term")
 def get_all_playlist_ids():
-    return gm.get_all_songs(auto=False)
+    playlistids = {}
+    try:
+        playlistids = gm.get_all_playlist_ids(auto=False)['user']
+    except Exception:
+        pass
+    return playlistids
 
 
 @cache_region("default_term")

@@ -25,6 +25,7 @@ currently_logged_in_token = None
 def authorize():
     def authorize_decorator(view_func):
         logger.info("Decorator called")
+
         def _decorator(view, *args, **kwargs):
             auth_token = view.cookies.get("auth-token")
             logger.info(view.cookies)
@@ -62,8 +63,14 @@ def api_get_all_songs(request):
     page = int(request.params.get("page", 0))
     items = int(request.params.get("items", 1000))
     songs = []
-    songs = get_all_songs()[page * items:(page + 1) * items]
-    return songs
+    songs = get_all_songs()
+    playlist_names = get_all_playlist_ids()
+    for name in playlist_names:
+        for pid in playlist_names[name]:
+            for song in get_playlist_songs(pid):
+                if song not in songs:
+                    songs.append(song)
+    return songs[page * items:(page + 1) * items]
 
 
 @view_config(route_name='api_get_song', renderer="json")
