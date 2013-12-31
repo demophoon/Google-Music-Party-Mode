@@ -120,6 +120,14 @@
             .clear {
                 both: clear;
             }
+            .marquee {
+                white-space: nowrap;
+            }
+            .marquee td {
+                width: 210px;
+                overflow: hidden;
+                display: inline-block;
+            }
         </style>
         <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
         <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.3.0/knockout-min.js"></script>
@@ -164,32 +172,50 @@
 
             ko.bindingHandlers.marquee = {
                 init: function(elem, valueAccessor) {
-                    console.log($(elem)[0].scrollWidth, $(elem).outerWidth());
-                        new scrollLeft(elem).scroll();
+                    console.log(valueAccessor());
+                    console.log($(elem).children())
+                    console.log($(elem).children()[0].scrollWidth, $(elem).outerWidth());
                     if($(elem)[0].scrollWidth>$(elem).outerWidth()){
+                        new scrollLeft(elem).scroll();
                     }
                 }
+            }
+
+            function getSongData(pageNumber, songs) {
+                if (pageNumber == undefined || songs == undefined) {
+                    pageNumber = 0;
+                    songs = [];
+                }
+                $.ajax({
+                    url: '/api/v1/songs',
+                    data: {
+                        page: pageNumber,
+                        items: 1000,
+                    },
+                    success: function(data) {
+                        for (var x in data) {
+                            songs.push(data[x]);
+                        }
+                        if (data.length == 1000) {
+                            getSongData(pageNumber+1, songs);
+                        } else {
+                            finalSongs = ViewModel.songs();
+                            for (var x in songs) {
+                                if (ViewModel.indexedIds.indexOf(songs[x].id) == -1) {
+                                    finalSongs.push(new Song(songs[x]));
+                                    ViewModel.indexedIds.push(songs[x].id);
+                                }
+                            }
+                            ViewModel.songs(finalSongs);
+                        }
+                    }
+                });
             }
 
             function init() {
                 var timer = setInterval(updateStatus, 250);
 
-                $('.marquee').each(function(key, item){
-                    if($(item)[0].scrollWidth>$(item).outerWidth()){
-                        new scrollLeft(item).scroll();
-                    }
-                });
-
-                $.ajax({
-                    url: '/api/v1/songs',
-                    success: function(data) {
-                        songs = [];
-                        for (var x in data) {
-                            songs.push(new Song(data[x]));
-                        }
-                        ViewModel.songs(songs);
-                    }
-                });
+                getSongData();
 
                 window.requestAnimFrame = (function(){
                     return  window.requestAnimationFrame       ||
@@ -276,10 +302,10 @@
                 var FFTArray = new Float32Array(1024);
                 analyser.getFloatFrequencyData(FFTArray);
                 //ctx.clearRect(0,0,canvas.width,canvas.height);
-                ctx.globalAlpha = .1;
+                ctx.globalAlpha = .05;
                 ctx.fillStyle = ViewModel.backgroundColor();
                 ctx.fillRect(0,0,canvas.width,canvas.height);
-                ctx.globalAlpha = 1;
+                ctx.globalAlpha = .50;
                 ctx.fillStyle = ViewModel.primaryColor();
                 for (var x=0; x<FFTArray.length; x+=1) {
                     // ctx.fillRect((x/FFTArray.length)*canvas.width,canvas.height,FFTArray.length/canvas.width,(FFTArray[x]+200)*-2);
@@ -368,18 +394,18 @@
                             <img id="queuedAlbumArt" data-bind="click: song.removeFromQueue, attr: { src: song.albumart }" />
                         </td>
                     </tr>
-                    <tr>
-                        <td>
+                    <tr class="marquee" >
+                        <td data-bind="marquee: true">
                             <span id="title" data-bind="text: song.title"></span><br>
                         </td>
                     </tr>
-                    <tr>
-                        <td>
+                    <tr class="marquee">
+                        <td data-bind="marquee: true">
                             <span id="artist" data-bind="text: song.artist"></span><br>
                         </td>
                     </tr>
-                    <tr>
-                        <td>
+                    <tr class="marquee">
+                        <td data-bind="marquee: true">
                             <span id="album" data-bind="text: song.album"></span>
                         </td>
                     </tr>
@@ -394,7 +420,8 @@
                 <ul class="pagination">
                     <li><a href="#" data-bind="click: prevPage">&laquo;</a></li>
                     <li><a href="#" data-bind="click: nextPage">&raquo;</a></li>
-                </ul>
+                </ul><br>
+                <button class="btn btn-primary" data-bind="click: function() { ViewModel.populateQueueFromSearch(10); }">Add 10 Random Songs From Search To Queue</button>
             </center>
 
             <table class="table table-condensed">
@@ -431,12 +458,20 @@
             var viewModel = function() {
                 var me = this;
                 me.songs = ko.observableArray([]);
+                me.indexedIds = [];
 
                 me.search = ko.observable('');
 
                 me.page = ko.observable(0);
                 me.maxSongsPerPage = ko.observable(100);
                 me.visibleSongs = ko.computed(function() {
+
+                    me.songs.sort(function(a, b) {
+                        asort = a.artist + a.album + ("00000" + a.track).slice(-5);
+                        bsort = b.artist + b.album + ("00000" + b.track).slice(-5);
+                        return asort > bsort ? 1 : bsort > asort ? -1 : 0;
+                    });
+
                     var ret = [];
                     if (me.search() == '') {
                         for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < me.songs().length; x+=1) {
@@ -444,11 +479,15 @@
                         }
                     } else {
                         var rexp = RegExp(me.search(), "gi");
+                        var matches = [];
                         for (var x=0; x<me.songs().length && ret.length<me.maxSongsPerPage(); x+=1) {
                             var song = me.songs()[x];
                             if (song.title.match(rexp) || song.artist.match(rexp) || song.album.match(rexp) || song.genre.match(rexp)) {
-                                ret.push(me.songs()[x]);
+                                matches.push(me.songs()[x]);
                             }
+                        }
+                        for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < matches.length; x+=1) {
+                            ret.push(matches[x]);
                         }
                     }
                     ret.sort(function(a, b) {
@@ -484,6 +523,12 @@
                 }
                 me.addToQueue = function(id) {
                     me.queue.push(me.generate_queue_object(id));
+                }
+
+                me.populateQueueFromSearch = function(x) {
+                    for (var i=0; i<x; i++) {
+                        me.addToQueue(me.visibleSongs()[~~(Math.random() * me.visibleSongs().length)].id)
+                    }
                 }
 
                 me.populateQueue = function(x) {
