@@ -147,7 +147,6 @@
 
             function scrollLeft(obj) {
                 this.obj = obj;
-                console.log(obj);
             }
             scrollLeft.prototype = {
                 reset: function() {
@@ -165,19 +164,20 @@
                 scroll: function() {
                     var that = this;
                     var scroll_amount = $(that.obj)[0].scrollWidth-$(that.obj).outerWidth();
-                    $(that.obj).animate({scrollLeft: scroll_amount}, scroll_amount*75, 'linear');
-                    setTimeout(function() { that.fadeOut(); }, scroll_amount*75 + 3500);
+                    if (scroll_amount > 0) {
+                        $(that.obj).animate({scrollLeft: scroll_amount}, scroll_amount*75, 'linear');
+                        setTimeout(function() { that.fadeOut(); }, scroll_amount*75 + 3500);
+                    }
                 },
+                start: function() {
+                    var that = this;
+                    setTimeout(function() { that.scroll(); }, 5000);
+                }
             }
 
             ko.bindingHandlers.marquee = {
                 init: function(elem, valueAccessor) {
-                    console.log(valueAccessor());
-                    console.log($(elem).children())
-                    console.log($(elem).children()[0].scrollWidth, $(elem).outerWidth());
-                    if($(elem)[0].scrollWidth>$(elem).outerWidth()){
-                        new scrollLeft(elem).scroll();
-                    }
+                    new scrollLeft($(elem).find("td")[0]).start();
                 }
             }
 
@@ -394,18 +394,18 @@
                             <img id="queuedAlbumArt" data-bind="click: song.removeFromQueue, attr: { src: song.albumart }" />
                         </td>
                     </tr>
-                    <tr class="marquee" >
-                        <td data-bind="marquee: true">
+                    <tr class="marquee" data-bind="marquee: true">
+                        <td>
                             <span id="title" data-bind="text: song.title"></span><br>
                         </td>
                     </tr>
-                    <tr class="marquee">
-                        <td data-bind="marquee: true">
+                    <tr class="marquee" data-bind="marquee: true">
+                        <td>
                             <span id="artist" data-bind="text: song.artist"></span><br>
                         </td>
                     </tr>
-                    <tr class="marquee">
-                        <td data-bind="marquee: true">
+                    <tr class="marquee" data-bind="marquee: true">
+                        <td>
                             <span id="album" data-bind="text: song.album"></span>
                         </td>
                     </tr>
@@ -464,7 +464,8 @@
 
                 me.page = ko.observable(0);
                 me.maxSongsPerPage = ko.observable(100);
-                me.visibleSongs = ko.computed(function() {
+
+                me.filteredSongs = ko.computed(function() {
 
                     me.songs.sort(function(a, b) {
                         asort = a.artist + a.album + ("00000" + a.track).slice(-5);
@@ -472,12 +473,10 @@
                         return asort > bsort ? 1 : bsort > asort ? -1 : 0;
                     });
 
-                    var ret = [];
                     if (me.search() == '') {
-                        for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < me.songs().length; x+=1) {
-                            ret.push(me.songs()[x]);
-                        }
+                        return me.songs();
                     } else {
+                        var ret = [];
                         var rexp = RegExp(me.search(), "gi");
                         var matches = [];
                         for (var x=0; x<me.songs().length && ret.length<me.maxSongsPerPage(); x+=1) {
@@ -486,9 +485,15 @@
                                 matches.push(me.songs()[x]);
                             }
                         }
-                        for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < matches.length; x+=1) {
-                            ret.push(matches[x]);
-                        }
+                        return matches;
+                    }
+                });
+
+                me.visibleSongs = ko.computed(function() {
+
+                    var ret = [];
+                    for (var x=me.page()*me.maxSongsPerPage(); x<(me.page()+1)*me.maxSongsPerPage() && x < me.filteredSongs().length; x+=1) {
+                        ret.push(me.filteredSongs()[x]);
                     }
                     ret.sort(function(a, b) {
                         asort = a.artist + a.album + ("00000" + a.track).slice(-5);
@@ -496,6 +501,14 @@
                         return asort > bsort ? 1 : bsort > asort ? -1 : 0;
                     });
                     return ret;
+                });
+
+                me.pageCount = ko.computed(function() {
+                    var pages = Math.ceil(me.filteredSongs().length / me.maxSongsPerPage());
+                    if (me.page() > pages) {
+                        me.page(pages - 1);
+                    }
+                    return pages;
                 });
 
                 me.nextPage = function() {
