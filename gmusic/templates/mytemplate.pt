@@ -248,27 +248,6 @@
                 })();
             }
 
-            function downloadSong(id) {
-                var request = new XMLHttpRequest();
-                request.open('GET', url + "?song_id=" + id, true);
-                request.responseType = 'arraybuffer';
-
-                request.onload = function() {
-                    context.decodeAudioData(request.response, function(buffer) {
-                        currentSongBuffer = buffer;
-                        for (var x in ViewModel.queue()) {
-                            if (ViewModel.queue()[x].id == id) {
-                                ViewModel.queue()[x].buffer = buffer;
-                                break;
-                            }
-                        }
-                    }, function() {
-                        console.warn("Error Loading Buffer");
-                    });
-                }
-                request.send();
-            }
-
             var volumeDown = function(source) {
                 source.gain.value -= .05;
                 if (source.gain.value > 0) {
@@ -291,9 +270,9 @@
                 source.connect(analyser);
                 source.start(context.currentTime + delay_play);
                 var start_time = context.currentTime + delay_play;
-                ViewModel.currentSong().start = start_time;
+                ViewModel.currentSong().start(start_time);
                 ViewModel.currentSong().position = function() {
-                    return context.currentTime - ViewModel.currentSong().start;
+                    return context.currentTime - ViewModel.currentSong().start();
                 };
                 sources.push({source: source, start: start_time});
             }
@@ -316,70 +295,79 @@
             function updateStatus() {
                 now = context.currentTime;
 
-                if (ViewModel.currentSong() && ViewModel.currentSong().start !== false && ViewModel.playStatus() == "playing") {
-                    if (now - ViewModel.currentSong().start > ViewModel.currentSong().buffer.duration - 1) {
-                        if (ViewModel.queue().length > 0 && ViewModel.queue()[0].buffer && !ViewModel.queue()[0].locked()) {
-                            ViewModel.queue()[0].locked(true);
-                            currentEnd = ViewModel.currentSong().start + ViewModel.currentSong().buffer.duration - .1;
-                            delay = currentEnd - context.currentTime;
-                            ViewModel.currentSong(ViewModel.queue.shift());
-                            playBuffer(ViewModel.currentSong().buffer, delay);
-                        }
-                    } 
-                    if (now - ViewModel.currentSong().start > (ViewModel.currentSong().buffer.duration)) {
-                        ViewModel.currentSong(null);
-                        ViewModel.playStatus("stopped");
-                    }
-                    ViewModel.calculatedPosition(ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration);
-                }
+                queue = ViewModel.queue();
+                currentSong = ViewModel.currentSong();
 
-                if (ViewModel.currentSong() == null && ViewModel.queue().length > 0) {
-                    if (ViewModel.queue()[0].buffer) {
-                        ViewModel.currentSong(ViewModel.queue.shift());
-                    }
-                }
-
-                if (ViewModel.currentSong() && !ViewModel.currentSong().locked() && ViewModel.playStatus() == 'stopped') {
-                    ViewModel.playStatus("playing");
-                    playBuffer(ViewModel.currentSong().buffer, 0);
-                }
-
-                buffers = 0;
-                maxBuffers = 2;
-                for (var x in ViewModel.queue()) {
-                    if (buffers >= maxBuffers) {
-                        break;
-                    }
-                    if (!ViewModel.queue()[x].buffer) {
-                        if (!ViewModel.queue()[x].gettingBuffer) {
-                            if (!ViewModel.currentSong() ) {
-                                ViewModel.queue()[x].gettingBuffer = true;
-                                downloadSong(ViewModel.queue()[x].id);
-                            } else if (ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration > .5) {
-                                ViewModel.queue()[x].gettingBuffer = true;
-                                downloadSong(ViewModel.queue()[x].id);
-                            }
-                            break;
-                        }
-                    }
-                    buffers += 1;
+                if (queue.length > 0 && currentSong == null) {
+                    queue[0].play();
                 }
             }
+
+            // function updateStatus2() {
+            //     now = context.currentTime;
+            //     if (ViewModel.currentSong() && ViewModel.currentSong().start !== false && ViewModel.playStatus() == "playing") {
+            //         if (now - ViewModel.currentSong().start > ViewModel.currentSong().buffer.duration - 1) {
+            //             if (ViewModel.queue().length > 0 && ViewModel.queue()[0].buffer && !ViewModel.queue()[0].locked()) {
+            //                 ViewModel.queue()[0].locked(true);
+            //                 currentEnd = ViewModel.currentSong().start + ViewModel.currentSong().buffer.duration - .1;
+            //                 delay = currentEnd - context.currentTime;
+            //                 ViewModel.currentSong(ViewModel.queue.shift());
+            //                 playBuffer(ViewModel.currentSong().buffer, delay);
+            //             }
+            //         } 
+            //         if (now - ViewModel.currentSong().start > (ViewModel.currentSong().buffer.duration)) {
+            //             ViewModel.currentSong(null);
+            //             ViewModel.playStatus("stopped");
+            //         }
+            //         ViewModel.calculatedPosition(ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration);
+            //     }
+            //     if (ViewModel.currentSong() == null && ViewModel.queue().length > 0) {
+            //         if (ViewModel.queue()[0].buffer) {
+            //             ViewModel.currentSong(ViewModel.queue.shift());
+            //         }
+            //     }
+            //     if (ViewModel.currentSong() && !ViewModel.currentSong().locked() && ViewModel.playStatus() == 'stopped') {
+            //         ViewModel.playStatus("playing");
+            //         playBuffer(ViewModel.currentSong().buffer, 0);
+            //     }
+            //     buffers = 0;
+            //     maxBuffers = 2;
+            //     for (var x in ViewModel.queue()) {
+            //         if (buffers >= maxBuffers) {
+            //             break;
+            //         }
+            //         if (!ViewModel.queue()[x].buffer) {
+            //             if (!ViewModel.queue()[x].gettingBuffer) {
+            //                 if (!ViewModel.currentSong() ) {
+            //                     ViewModel.queue()[x].gettingBuffer = true;
+            //                     ViewModel.queue()[x].song.download();
+            //                     //downloadSong(ViewModel.queue()[x].id);
+            //                 } else if (ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration > .5) {
+            //                     ViewModel.queue()[x].gettingBuffer = true;
+            //                     ViewModel.queue()[x].song.download();
+            //                     //downloadSong(ViewModel.queue()[x].id);
+            //                 }
+            //                 break;
+            //             }
+            //         }
+            //         buffers += 1;
+            //     }
+            // }
 
             $(document).ready(init);
         </script>
 
         <span id='albumArt' data-bind="if: currentSong">
-            <img data-bind="attr: { src: currentSong().song.albumart }" />
+            <img data-bind="attr: { src: currentSong.albumart }" />
         </span>
         <div id='songPosition' data-bind="if: currentSong">
             <div data-bind="style: { width: (calculatedPosition() * 100) + '%', backgroundColor: primaryColor }"></div>
         </div>
         <div id='currentSong' data-bind="if: currentSong">
             <span id="metadata">
-                <span id="title" data-bind="text: currentSong().song.title"></span><br>
-                <span id="artist" data-bind="text: currentSong().song.artist"></span>&nbsp;&mdash;&nbsp;
-                <span id="album" data-bind="text: currentSong().song.album"></span>
+                <span id="title" data-bind="text: currentSong.title"></span><br>
+                <span id="artist" data-bind="text: currentSong.artist"></span>&nbsp;&mdash;&nbsp;
+                <span id="album" data-bind="text: currentSong.album"></span>
             </span>
         </div>
 
@@ -391,22 +379,22 @@
                 <tbody id="song" data-bind="foreach: queue">
                     <tr>
                         <td rowspan=4>
-                            <img id="queuedAlbumArt" data-bind="click: song.removeFromQueue, attr: { src: song.albumart }" />
+                            <img id="queuedAlbumArt" data-bind="click: removeFromQueue, attr: { src: albumart }" />
                         </td>
                     </tr>
                     <tr class="marquee" data-bind="marquee: true">
                         <td>
-                            <span id="title" data-bind="text: song.title"></span><br>
+                            <span id="title" data-bind="text: title"></span><br>
                         </td>
                     </tr>
                     <tr class="marquee" data-bind="marquee: true">
                         <td>
-                            <span id="artist" data-bind="text: song.artist"></span><br>
+                            <span id="artist" data-bind="text: artist"></span><br>
                         </td>
                     </tr>
                     <tr class="marquee" data-bind="marquee: true">
                         <td>
-                            <span id="album" data-bind="text: song.album"></span>
+                            <span id="album" data-bind="text: album"></span>
                         </td>
                     </tr>
                 </tbody>
@@ -429,6 +417,7 @@
                     <tr>
                         <th class='controls'></th>
                         <th>#</th>
+                        <th>Status</th>
                         <th>Title</th>
                         <th>Artist</th>
                         <th>Album</th>
@@ -437,13 +426,14 @@
                     </tr>
                 </thead>
                 <tbody data-bind="foreach: visibleSongs">
-                    <tr data-bind="attr: { class: isPlaying }">
+                    <tr data-bind="attr: { class: status }">
                         <td class='controls'>
                             <a href="#" alt="Play" data-bind="click: play"><span class="glyphicon glyphicon-play"></span></a>
                             <a href="#" alt="Add to Queue" data-bind="click: addToQueue"><span class="glyphicon glyphicon-plus"></span></a>
                             <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-chevron-right"></span></a>
                         </td>
                         <td data-bind="text: track"></td>
+                        <td data-bind="text: status"></td>
                         <td data-bind="text: title"></td>
                         <td data-bind="text: artist"></td>
                         <td data-bind="text: album"></td>
@@ -528,9 +518,13 @@
                 me.primaryColor = ko.observable("#33B5E5");
                 me.backgroundColor = ko.observable("#cccccc");
 
-                me.currentSong = ko.observable(null);
+                me.currentSong = ko.computed(function() {
+                    var song = ko.utils.arrayFirst(me.songs(), function(song) {
+                        return song.status() == "playing" || song.status() == "paused";
+                    });
+                    return song;
+                });
                 me.queue = ko.observableArray([]);
-                me.playStatus = ko.observable("stopped");
                 me.playNext = function(id) {
                     me.queue.unshift(me.generate_queue_object(id));
                 }
@@ -553,15 +547,8 @@
                 me.generate_queue_object = function(id) {
                     var song = ko.utils.arrayFirst(me.songs(), function(item) {
                         return item.id == id;
-                    })
-                    return {
-                        'id': id,
-                        'song': song,
-                        'buffer': null,
-                        'gettingBuffer': false,
-                        'start': false,
-                        'locked': ko.observable(false),
-                    };
+                    });
+                    return song;
                 }
 
             }
@@ -584,18 +571,39 @@
                 me.minutes = ~~(obj.durationMillis / 60000);
                 me.seconds = ("00" + (obj.durationMillis / 1000) % 60).slice(-2);
 
+                me.start = ko.observable(0);
+
+                me.buffer = null;
+                me.status = ko.observable("new");
+
+                me.download = function(callback) {
+                    if (callback === undefined) {
+                        callback = function(){};
+                    }
+                    if (me.buffer == null) {
+                        me.status("downloading");
+                        var request = new XMLHttpRequest();
+                        request.open('GET', url + "?song_id=" + me.id, true);
+                        request.responseType = 'arraybuffer';
+                        request.onload = function() {
+                            me.status("decoding");
+                            context.decodeAudioData(request.response, function(buffer) {
+                                me.buffer = buffer;
+                                me.status("ready");
+                                callback(buffer);
+                            }, function() {
+                                console.warn("Error Loading Buffer");
+                            });
+                        }
+                        request.send();
+                    }
+                }
+
                 me.albumart = obj.albumArtUrl;
                 me.artistart = obj.artistImageBaseUrl;
 
                 me.artist_id = obj.artistMatchedId;
                 me.album_id = obj.albumMatchedId;
-
-                me.isPlaying = ko.computed(function() {
-                    if (ViewModel.currentSong()) {
-                        return ViewModel.currentSong().id == me.id ? "playing" : "";
-                    }
-                    return "";
-                });
 
                 me.addToQueue = function() {
                     ViewModel.addToQueue(me.id);
@@ -607,10 +615,18 @@
                     });
                 }
 
+
                 me.play = function() {
-                    ViewModel.playNext(me.id);
-                    ViewModel.currentSong(null);
-                    ViewModel.playStatus("stopped");
+                    if (me.status == "ready") {
+                        playBuffer(me.buffer);
+                    } else if (me.status == "downloading" || me.status == "decoding") {
+                        setTimeout(function() {
+                            me.play();
+                        }, 50);
+                    } else {
+                        me.download(playBuffer);
+                    }
+                    //ViewModel.playNext(me.id);
                 }
 
                 me.playNext = function() {
