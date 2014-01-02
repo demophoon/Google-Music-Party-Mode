@@ -201,9 +201,9 @@
                         } else {
                             finalSongs = ViewModel.songs();
                             for (var x in songs) {
-                                if (ViewModel.indexedIds.indexOf(songs[x].id) == -1) {
+                                if (ViewModel.indexedIds.indexOf(songs[x].storeId) == -1) {
                                     finalSongs.push(new Song(songs[x]));
-                                    ViewModel.indexedIds.push(songs[x].id);
+                                    ViewModel.indexedIds.push(songs[x].storeId);
                                 }
                             }
                             ViewModel.songs(finalSongs);
@@ -249,14 +249,15 @@
             }
 
             var volumeDown = function(song) {
-                song.sourceNode.gain.value -= .05;
-                if (song.sourceNode.gain.value > 0) {
-                    setTimeout(function() { volumeDown(song);}, 50);
-                } else {
-                    song.sourceNode.disconnect();
-                    song.sourceNode = null;
-                    song.buffer = null;
-                    song.status("new");
+                if (song.sourceNode) {
+                    song.sourceNode.gain.value -= .05;
+                    if (song.sourceNode.gain.value > 0) {
+                        setTimeout(function() { volumeDown(song);}, 50);
+                    } else {
+                        song.sourceNode.disconnect();
+                        song.sourceNode = null;
+                        song.status("ready");
+                    }
                 }
             }
 
@@ -278,13 +279,13 @@
                 song.sourceNode.onended = function() {
                     song.sourceNode.disconnect();
                     song.sourceNode = null;
-                    song.buffer = null;
-                    song.status("new");
+                    ViewModel.queue.shift();
+                    song.status("ready");
                 }
                 song.sourceNode.start(context.currentTime + delay_play);
                 song.status("playing");
                 var start_time = context.currentTime + delay_play;
-                ViewModel.currentSong().start(start_time);
+                song.start(start_time);
                 sources.push(song)
                 //sources.push({source: source, start: start_time});
             }
@@ -311,12 +312,36 @@
                 queue = ViewModel.queue();
                 currentSong = ViewModel.currentSong();
 
+                if (currentSong) {
+                    ViewModel.calculatedPosition(currentSong.calculatedPosition());
+                }
+
                 if (queue.length > 0) {
                     queue[0].play();
                 }
 
-                if (currentSong !== null && (currentSong.status() == "playing" || currentSong.status() == "paused")) {
-                    ViewModel.calculatedPosition(ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration);
+                // Preload Songs
+                if (ViewModel.calculatedPosition() >= .05) {
+                    if (queue.length >= 2 && queue[1].status() == "new") {
+                        queue[1].download();
+                    }
+                } else if (ViewModel.calculatedPosition() >= .5) {
+                    var preloadedSongs = 0;
+                    var maxSongs = 3;
+                    for (var x=1; x<queue.length && preloadedSongs < maxSongs; x+=1) {
+                        if (queue[x].status() == "new") {
+                            queue[x].download();
+                            break;
+                        }
+                        preloadedSongs += 1;
+                    }
+                }
+
+                if (currentSong && currentSong.status() == "playing" && currentSong.buffer.duration - currentSong.position() < 1) {
+                    nextSong = (currentSong.buffer.duration - currentSong.position())
+                    if (queue.length >= 1) {
+                        queue[1].play(nextSong);
+                    }
                 }
 
             }
@@ -390,7 +415,7 @@
         </div>
 
         <div id='queuedSongs'>
-            <div data-bind="if: queue().length == 0">
+            <div data-bind="if: queue().length <= 1">
                 <center><button class="btn btn-primary" data-bind="click: function() { ViewModel.populateQueue(10); }">Add 10 Random Songs To Queue</button></center>
             </div>
             <table cellspacing='0'>
@@ -446,7 +471,7 @@
                 <tbody data-bind="foreach: visibleSongs">
                     <tr data-bind="attr: { class: status }">
                         <td class='controls'>
-                            <a href="#" alt="Play" data-bind="click: play"><span class="glyphicon glyphicon-play"></span></a>
+                            <a href="#" alt="Play" data-bind="click: playNow"><span class="glyphicon glyphicon-play"></span></a>
                             <a href="#" alt="Add to Queue" data-bind="click: addToQueue"><span class="glyphicon glyphicon-plus"></span></a>
                             <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-chevron-right"></span></a>
                         </td>
@@ -558,7 +583,8 @@
                 });
 
                 me.playNext = function(id) {
-                    me.queue.unshift(me.generate_queue_object(id));
+                    me.queue.splice(1, 0, me.generate_queue_object(id));
+                    //me.queue.unshift(me.generate_queue_object(id));
                 }
                 me.addToQueue = function(id) {
                     me.queue.push(me.generate_queue_object(id));
@@ -593,6 +619,7 @@
             var Song = function(obj) {
                 var me = this;
                 me.id = obj.id;
+                me.store_id = obj.storeId;
 
                 me.title = obj.name;
                 me.artist = obj.artist;
@@ -608,6 +635,14 @@
                 me.position = function() {
                     return context.currentTime - me.start();
                 };
+
+                me.calculatedPosition = function() {
+                    if (currentSong !== null && (currentSong.status() == "playing" || currentSong.status() == "paused")) {
+                        return me.position() / me.buffer.duration;
+                    }
+                    return 0;
+                }
+
 
                 me.buffer = null;
                 me.sourceNode = null;
@@ -636,8 +671,6 @@
                             });
                         }
                         request.send();
-                    } else if (me.buffer != null) {
-                        me.afterDownloadCallback(me);
                     }
                 }
 
@@ -659,9 +692,28 @@
 
                 me.afterDownloadCallback = null;
 
-                me.play = function() {
+                me.playNow = function() {
+                    ViewModel.queue.shift();
+                    ViewModel.queue.unshift(me);
+                }
+
+                me.play = function(time) {
+                    if (time === undefined) {
+                        time = 0;
+                    }
+                    if (me.status() == "scheduled") {
+                        return;
+                    }
                     if (me.status() == "ready") {
-                        playBuffer(me);
+                        if (time > 0) {
+                            playBuffer(me, time);
+                            me.status("scheduled");
+                            setTimeout(function() {
+                                me.status("playing");
+                            }, time*1000);
+                        } else {
+                            playBuffer(me);
+                        }
                     } else if (me.status() == "downloading" || me.status() == "decoding") {
                         me.afterDownloadCallback = playBuffer;
                     } else {
