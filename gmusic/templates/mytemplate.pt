@@ -248,33 +248,45 @@
                 })();
             }
 
-            var volumeDown = function(source) {
-                source.gain.value -= .05;
-                if (source.gain.value > 0) {
-                    setTimeout(function() { volumeDown(source);}, 50);
+            var volumeDown = function(song) {
+                song.sourceNode.gain.value -= .05;
+                if (song.sourceNode.gain.value > 0) {
+                    setTimeout(function() { volumeDown(song);}, 50);
                 } else {
-                    source.disconnect();
+                    song.sourceNode.disconnect();
+                    song.sourceNode = null;
+                    song.buffer = null;
+                    song.status("new");
                 }
             }
 
             var sources = [];
-            function playBuffer(buffer, delay_play) {
+            function playBuffer(song, delay_play) {
+                buffer = song.buffer;
+                if (delay_play == null) {
+                    delay_play = 0;
+                }
                 if (delay_play <= 0) {
                     delay_play = 0;
                     for (var x in sources) {
-                        volumeDown(sources.pop()['source']);
+                        volumeDown(sources.pop());
                     }
                 }
-                var source = context.createBufferSource();
-                source.buffer = buffer;
-                source.connect(analyser);
-                source.start(context.currentTime + delay_play);
+                song.sourceNode = context.createBufferSource();
+                song.sourceNode.buffer = buffer;
+                song.sourceNode.connect(analyser);
+                song.sourceNode.onended = function() {
+                    song.sourceNode.disconnect();
+                    song.sourceNode = null;
+                    song.buffer = null;
+                    song.status("new");
+                }
+                song.sourceNode.start(context.currentTime + delay_play);
+                song.status("playing");
                 var start_time = context.currentTime + delay_play;
                 ViewModel.currentSong().start(start_time);
-                ViewModel.currentSong().position = function() {
-                    return context.currentTime - ViewModel.currentSong().start();
-                };
-                sources.push({source: source, start: start_time});
+                sources.push(song)
+                //sources.push({source: source, start: start_time});
             }
 
             function analyseAudio() {
@@ -293,14 +305,20 @@
             }
 
             function updateStatus() {
+
                 now = context.currentTime;
 
                 queue = ViewModel.queue();
                 currentSong = ViewModel.currentSong();
 
-                if (queue.length > 0 && currentSong == null) {
+                if (queue.length > 0) {
                     queue[0].play();
                 }
+
+                if (currentSong !== null && (currentSong.status() == "playing" || currentSong.status() == "paused")) {
+                    ViewModel.calculatedPosition(ViewModel.currentSong().position() / ViewModel.currentSong().buffer.duration);
+                }
+
             }
 
             // function updateStatus2() {
@@ -357,17 +375,17 @@
             $(document).ready(init);
         </script>
 
-        <span id='albumArt' data-bind="if: currentSong">
-            <img data-bind="attr: { src: currentSong.albumart }" />
+        <span id='albumArt' data-bind="if: currentSong()">
+            <img data-bind="attr: { src: currentSong().albumart }" />
         </span>
-        <div id='songPosition' data-bind="if: currentSong">
+        <div id='songPosition' data-bind="if: currentSong()">
             <div data-bind="style: { width: (calculatedPosition() * 100) + '%', backgroundColor: primaryColor }"></div>
         </div>
-        <div id='currentSong' data-bind="if: currentSong">
+        <div id='currentSong' data-bind="if: currentSong()">
             <span id="metadata">
-                <span id="title" data-bind="text: currentSong.title"></span><br>
-                <span id="artist" data-bind="text: currentSong.artist"></span>&nbsp;&mdash;&nbsp;
-                <span id="album" data-bind="text: currentSong.album"></span>
+                <span id="title" data-bind="text: currentSong().title"></span><br>
+                <span id="artist" data-bind="text: currentSong().artist"></span>&nbsp;&mdash;&nbsp;
+                <span id="album" data-bind="text: currentSong().album"></span>
             </span>
         </div>
 
@@ -376,7 +394,7 @@
                 <center><button class="btn btn-primary" data-bind="click: function() { ViewModel.populateQueue(10); }">Add 10 Random Songs To Queue</button></center>
             </div>
             <table cellspacing='0'>
-                <tbody id="song" data-bind="foreach: queue">
+                <tbody id="song" data-bind="foreach: visibleQueue">
                     <tr>
                         <td rowspan=4>
                             <img id="queuedAlbumArt" data-bind="click: removeFromQueue, attr: { src: albumart }" />
@@ -518,13 +536,27 @@
                 me.primaryColor = ko.observable("#33B5E5");
                 me.backgroundColor = ko.observable("#cccccc");
 
+                me.queue = ko.observableArray([]);
+                me.visibleQueue = ko.computed(function() {
+                    ret = [];
+                    for (var x=1; x<me.queue().length; x+=1) {
+                        ret.push(me.queue()[x]);
+                    }
+                    return ret;
+                });
+
                 me.currentSong = ko.computed(function() {
+                    if (me.queue().length > 0) {
+                        return me.queue()[0];
+                    } else {
+                        return null;
+                    }
                     var song = ko.utils.arrayFirst(me.songs(), function(song) {
                         return song.status() == "playing" || song.status() == "paused";
                     });
                     return song;
                 });
-                me.queue = ko.observableArray([]);
+
                 me.playNext = function(id) {
                     me.queue.unshift(me.generate_queue_object(id));
                 }
@@ -573,14 +605,19 @@
 
                 me.start = ko.observable(0);
 
+                me.position = function() {
+                    return context.currentTime - me.start();
+                };
+
                 me.buffer = null;
+                me.sourceNode = null;
                 me.status = ko.observable("new");
 
                 me.download = function(callback) {
-                    if (callback === undefined) {
-                        callback = function(){};
+                    if (callback !== undefined) {
+                        me.afterDownloadCallback = callback;
                     }
-                    if (me.buffer == null) {
+                    if (me.buffer == null && me.status() == "new") {
                         me.status("downloading");
                         var request = new XMLHttpRequest();
                         request.open('GET', url + "?song_id=" + me.id, true);
@@ -590,12 +627,17 @@
                             context.decodeAudioData(request.response, function(buffer) {
                                 me.buffer = buffer;
                                 me.status("ready");
-                                callback(buffer);
+                                if (me.afterDownloadCallback != null) {
+                                    me.afterDownloadCallback(me);
+                                    me.afterDownloadCallback = null;
+                                }
                             }, function() {
                                 console.warn("Error Loading Buffer");
                             });
                         }
                         request.send();
+                    } else if (me.buffer != null) {
+                        me.afterDownloadCallback(me);
                     }
                 }
 
@@ -615,14 +657,13 @@
                     });
                 }
 
+                me.afterDownloadCallback = null;
 
                 me.play = function() {
-                    if (me.status == "ready") {
-                        playBuffer(me.buffer);
-                    } else if (me.status == "downloading" || me.status == "decoding") {
-                        setTimeout(function() {
-                            me.play();
-                        }, 50);
+                    if (me.status() == "ready") {
+                        playBuffer(me);
+                    } else if (me.status() == "downloading" || me.status() == "decoding") {
+                        me.afterDownloadCallback = playBuffer;
                     } else {
                         me.download(playBuffer);
                     }
