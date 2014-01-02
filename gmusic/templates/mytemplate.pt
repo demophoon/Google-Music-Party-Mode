@@ -321,13 +321,14 @@
                 }
 
                 // Preload Songs
-                if (ViewModel.calculatedPosition() >= .05) {
-                    if (queue.length >= 2 && queue[1].status() == "new") {
-                        queue[1].download();
+                if (currentSong && currentSong.status() == "playing" && currentSong.buffer.duration - currentSong.position() < 1) {
+                    nextSong = (currentSong.buffer.duration - currentSong.position())
+                    if (queue.length >= 1) {
+                        queue[1].play(nextSong - .3);
                     }
                 } else if (ViewModel.calculatedPosition() >= .5) {
                     var preloadedSongs = 0;
-                    var maxSongs = 3;
+                    var maxSongs = 2;
                     for (var x=1; x<queue.length && preloadedSongs < maxSongs; x+=1) {
                         if (queue[x].status() == "new") {
                             queue[x].download();
@@ -335,12 +336,16 @@
                         }
                         preloadedSongs += 1;
                     }
-                }
-
-                if (currentSong && currentSong.status() == "playing" && currentSong.buffer.duration - currentSong.position() < 1) {
-                    nextSong = (currentSong.buffer.duration - currentSong.position())
-                    if (queue.length >= 1) {
-                        queue[1].play(nextSong);
+                    readySongs = ViewModel.readySongs();
+                    for (var x=0; x<readySongs.length; x+=1) {
+                        if (queue.indexOf(readySongs[x]) == -1) {
+                            readySongs[x].buffer = null;
+                            readySongs[x].status("new");
+                        }
+                    }
+                } else if (ViewModel.calculatedPosition() >= .05) {
+                    if (queue.length >= 2 && queue[1].status() == "new") {
+                        queue[1].download();
                     }
                 }
 
@@ -580,6 +585,12 @@
                         return song.status() == "playing" || song.status() == "paused";
                     });
                     return song;
+                });
+
+                me.readySongs = ko.computed(function() {
+                    return ko.utils.arrayFilter(me.songs(), function(item) {
+                        return item.status() == "ready";
+                    });
                 });
 
                 me.playNext = function(id) {
