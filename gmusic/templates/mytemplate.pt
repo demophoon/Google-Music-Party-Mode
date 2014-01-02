@@ -640,7 +640,7 @@
 
                 me.populateQueueFromSearch = function(x) {
                     for (var i=0; i<x; i++) {
-                        me.addToQueue(me.filteredSongs()[~~(Math.random() * me.visibleSongs().length)].id)
+                        me.addToQueue(me.filteredSongs()[~~(Math.random() * me.filteredSongs().length)].id)
                     }
                 }
 
