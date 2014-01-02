@@ -20,17 +20,17 @@
             .glyphicon:hover {
                 color: #666;
             }
-            .playing .glyphicon {
+            .playing .glyphicon, .paused .glyphicon {
                 color: #fff;
             }
-            .playing .glyphicon:hover {
+            .playing .glyphicon:hover, .paused .glyphicon:hover {
                 color: #aaa;
             }
-            .playing {
+            .playing, .paused {
                 background-color: #333;
                 color: #fff;
             }
-            .playing:hover {
+            .playing:hover, .paused:hover {
                 background-color: #666;
                 color: #fff;
             }
@@ -127,6 +127,14 @@
                 width: 210px;
                 overflow: hidden;
                 display: inline-block;
+            }
+            #controls {
+                position: absolute;
+                bottom: 15px;
+                right: 25px;
+            }
+            #controls button span {
+                font-size: 26px;
             }
         </style>
         <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
@@ -262,9 +270,8 @@
             }
 
             var sources = [];
-            function playBuffer(song, delay_play) {
-                buffer = song.buffer;
-                if (delay_play == null) {
+            function playBuffer(song, delay_play, offset) {
+                if (delay_play === undefined) {
                     delay_play = 0;
                 }
                 if (delay_play <= 0) {
@@ -273,18 +280,23 @@
                         volumeDown(sources.pop());
                     }
                 }
+                if (offset === undefined) {
+                    offset = 0;
+                }
                 song.sourceNode = context.createBufferSource();
-                song.sourceNode.buffer = buffer;
+                song.sourceNode.buffer = song.buffer;
                 song.sourceNode.connect(analyser);
                 song.sourceNode.onended = function() {
                     song.sourceNode.disconnect();
                     song.sourceNode = null;
-                    ViewModel.queue.shift();
-                    song.status("ready");
+                    if (song.status() != "paused") {
+                        ViewModel.queue.shift();
+                        song.status("ready");
+                    }
                 }
-                song.sourceNode.start(context.currentTime + delay_play);
+                song.sourceNode.start(context.currentTime + delay_play, offset);
                 song.status("playing");
-                var start_time = context.currentTime + delay_play;
+                var start_time = context.currentTime + delay_play - offset;
                 song.start(start_time);
                 sources.push(song)
                 //sources.push({source: source, start: start_time});
@@ -417,6 +429,23 @@
                 <span id="artist" data-bind="text: currentSong().artist"></span>&nbsp;&mdash;&nbsp;
                 <span id="album" data-bind="text: currentSong().album"></span>
             </span>
+            <span id='controls'>
+                <span data-bind="if: currentSong().status() == 'paused'">
+                    <button class="btn" data-bind="click: currentSong().unpause"><span class="glyphicon glyphicon-play"></span></button>
+                </span>
+                <span data-bind="if: currentSong().status() == 'playing'">
+                    <button class="btn" data-bind="click: currentSong().pause"><span class="glyphicon glyphicon-pause"></span></button>
+                </span>
+                <span data-bind="if: currentSong().status() != 'playing' && currentSong().status() != 'paused'">
+                    <button class="btn disabled"><span class="glyphicon glyphicon-play"></span></button>
+                </span>
+                <span data-bind="if: scheduledSongs().length == 0">
+                    <button class="btn" data-bind="click: skipSong"><span class="glyphicon glyphicon-fast-forward"></span></button>
+                </span>
+                <span data-bind="if: scheduledSongs().length > 0">
+                    <button class="btn disabled"><span class="glyphicon glyphicon-fast-forward"></span></button>
+                </span>
+            </span>
         </div>
 
         <div id='queuedSongs'>
@@ -465,7 +494,6 @@
                     <tr>
                         <th class='controls'></th>
                         <th>#</th>
-                        <th>Status</th>
                         <th>Title</th>
                         <th>Artist</th>
                         <th>Album</th>
@@ -478,10 +506,9 @@
                         <td class='controls'>
                             <a href="#" alt="Play" data-bind="click: playNow"><span class="glyphicon glyphicon-play"></span></a>
                             <a href="#" alt="Add to Queue" data-bind="click: addToQueue"><span class="glyphicon glyphicon-plus"></span></a>
-                            <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-chevron-right"></span></a>
+                            <a href="#" alt="Play Song Next" data-bind="click: playNext"><span class="glyphicon glyphicon-play-circle"></span></a>
                         </td>
                         <td data-bind="text: track"></td>
-                        <td data-bind="text: status"></td>
                         <td data-bind="text: title"></td>
                         <td data-bind="text: artist"></td>
                         <td data-bind="text: album"></td>
@@ -593,6 +620,16 @@
                     });
                 });
 
+                me.scheduledSongs = ko.computed(function() {
+                    return ko.utils.arrayFilter(me.songs(), function(item) {
+                        return item.status() == "scheduled";
+                    });
+                });
+
+                me.skipSong = function() {
+                    volumeDown(me.queue.shift());
+                }
+
                 me.playNext = function(id) {
                     me.queue.splice(1, 0, me.generate_queue_object(id));
                     //me.queue.unshift(me.generate_queue_object(id));
@@ -631,12 +668,16 @@
                 var me = this;
                 me.id = obj.id;
                 me.store_id = obj.storeId;
+                me.artist_id = obj.artistMatchedId;
+                me.album_id = obj.albumMatchedId;
 
                 me.title = obj.name;
                 me.artist = obj.artist;
                 me.album = obj.album;
                 me.track = obj.track;
                 me.genre = obj.genre;
+                me.albumart = obj.albumArtUrl;
+                me.artistart = obj.artistImageBaseUrl;
                 me.duration = obj.durationMillis;
                 me.minutes = ~~(obj.durationMillis / 60000);
                 me.seconds = ("00" + (obj.durationMillis / 1000) % 60).slice(-2);
@@ -644,7 +685,12 @@
                 me.start = ko.observable(0);
 
                 me.position = function() {
-                    return context.currentTime - me.start();
+                    if (currentSong !== null && (currentSong.status() == "playing")) {
+                        return context.currentTime - me.start();
+                    } else if (currentSong !== null && (currentSong.status() == "paused")) {
+                        return me.pauseOffset;
+                    }
+                    return 0;
                 };
 
                 me.calculatedPosition = function() {
@@ -663,7 +709,7 @@
                     if (callback !== undefined) {
                         me.afterDownloadCallback = callback;
                     }
-                    if (me.buffer == null && me.status() == "new") {
+                    if (me.buffer === null && me.status() == "new") {
                         me.status("downloading");
                         var request = new XMLHttpRequest();
                         request.open('GET', url + "?song_id=" + me.id, true);
@@ -685,12 +731,6 @@
                     }
                 }
 
-                me.albumart = obj.albumArtUrl;
-                me.artistart = obj.artistImageBaseUrl;
-
-                me.artist_id = obj.artistMatchedId;
-                me.album_id = obj.albumMatchedId;
-
                 me.addToQueue = function() {
                     ViewModel.addToQueue(me.id);
                 }
@@ -708,11 +748,24 @@
                     ViewModel.queue.unshift(me);
                 }
 
+                me.pauseOffset = 0;
+                me.pause = function() {
+                    me.pauseOffset = me.position();
+                    me.status("paused");
+                    me.sourceNode.stop(0);
+                }
+
+                me.unpause = function() {
+                    me.status("ready");
+                    playBuffer(me, 0, me.pauseOffset);
+                    me.pauseOffset = 0;
+                }
+
                 me.play = function(time) {
                     if (time === undefined) {
                         time = 0;
                     }
-                    if (me.status() == "scheduled") {
+                    if (me.status() == "scheduled" || me.status() == "paused") {
                         return;
                     }
                     if (me.status() == "ready") {
