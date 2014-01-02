@@ -335,7 +335,7 @@
                 // Preload Songs
                 if (currentSong && currentSong.status() == "playing" && currentSong.buffer.duration - currentSong.position() < 1) {
                     nextSong = (currentSong.buffer.duration - currentSong.position())
-                    if (queue.length >= 1) {
+                    if (queue.length > 1) {
                         queue[1].play(nextSong - .3);
                     }
                 } else if (ViewModel.calculatedPosition() >= .5) {
