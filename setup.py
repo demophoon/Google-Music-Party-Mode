@@ -19,6 +19,9 @@ requires = [
     'waitress',
     'pyramid_beaker',
     'gmusicapi',
+    'gevent==1.0',
+    'gevent-websocket==0.3.6',
+    'pyramid-sockjs',
 ]
 
 setup(name='gmusic',

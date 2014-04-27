@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Google Music Settings</title>
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">
+        <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap-theme.min.css">
+
+        <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script> 
+        <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/knockout/2.3.0/knockout-min.js"></script>
+        <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script>
+    </head>
+    <body>
+        <div class='container'>
+
+            <form class="form-horizontal" role="form">
+                <div class="form-group">
+                    <label class="col-sm-2 control-label">Device ID</label>
+                    <div class="col-sm-10">
+                        <select class='form-control' data-bind='options: validDevices,
+                        optionsCaption: "Select Device ID",
+                        optionsText: function(item) {
+                            if (item.name) {
+                                return item.name + " - " + item.id;
+                            }
+                            return item.model + " - " + item.id;
+                        },
+                        value: selectedDevice'>
+                            <option value=''></option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="inputPassword" class="col-sm-2 control-label">Password</label>
+                    <div class="col-sm-10">
+                        <input type="password" class="form-control" disabled id="inputPassword" placeholder="Password">
+                    </div>
+                </div>
+                <input type='button' data-bind='click: saveSettings' class='form-control btn btn-primary' value='Save Settings' />
+            </form>
+
+        </div>
+
+        <script type="text/javascript" charset="utf-8">
+            var viewModel = function() {
+                var me = this;
+                me.devices = ko.observableArray();
+                me.validDevices = ko.computed(function() {
+                    var validDevices = [];
+                    for (var x in me.devices()) {
+                        if (me.devices()[x].id.indexOf("0x") == 0) {
+                            validDevices.push(me.devices()[x]);
+                        }
+                    }
+                    return validDevices;
+                });
+                me.selectedDevice = ko.observable();
+
+                $.ajax({
+                    url: "/api/v1/devices",
+                    success: function(data) {
+                        me.devices(data);
+                    },
+                });
+
+                me.saveSettings = function() {
+                    $.ajax({
+                        url: "/api/v1/devices",
+                        method: "POST",
+                        data: {
+                            "device_id": me.selectedDevice().id
+                        }
+                    })
+                }
+            }
+            var ViewModel = new viewModel();
+            ko.applyBindings(ViewModel);
+        </script>
+    </body>
+</html>

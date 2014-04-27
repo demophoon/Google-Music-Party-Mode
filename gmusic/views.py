@@ -13,9 +13,12 @@ from gmusic import (
     get_playlist_songs,
     get_song,
     check_username,
+    wc,
 )
 from .models import (
     DBSession,
+    _settings,
+    Song,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,7 +77,6 @@ def api_get_all_songs(request):
 
 
 @view_config(route_name='api_get_song', renderer="json")
-@authorize()
 def api_get_song(request):
     id = request.params.get("song_id")
     if id:
@@ -84,13 +86,32 @@ def api_get_song(request):
 
 
 @view_config(route_name='home', renderer='templates/mytemplate.pt')
-@authorize()
 def index(request):
-    return {}
+    return {"device_id": _settings.get_device_id()}
+
+
+@view_config(route_name='settings', renderer='templates/settings.pt')
+def settings(request):
+    return {"device_id": _settings.get_device_id()}
+
+
+@view_config(route_name='api_get_registered_devices', renderer="json", request_method="GET")
+def api_get_registered_devices(request):
+    return wc.get_registered_devices()
+
+
+@view_config(route_name='api_get_registered_devices', renderer="json", request_method="POST")
+def api_post_registered_devices(request):
+    device_id = request.POST['device_id']
+    _settings.set_device_id(device_id)
+    return _settings.device_id
 
 
 def includeme(config):
     config.add_route('home', '/')
+    config.add_route('settings', '/settings')
     config.add_route('api_login', '/login')
     config.add_route('api_get_all_songs', '/api/v1/songs')
     config.add_route('api_get_song', '/api/v1/song')
+
+    config.add_route('api_get_registered_devices', '/api/v1/devices')

@@ -143,6 +143,8 @@
     </head>
     <body>
 
+        <div tal:content="device_id"></div>
+
 
         <script type="text/javascript" charset="utf-8">
             url = "/api/v1/song";
@@ -671,14 +673,14 @@
                 me.artist_id = obj.artistMatchedId;
                 me.album_id = obj.albumMatchedId;
 
-                me.title = obj.name;
-                me.artist = obj.artist;
-                me.album = obj.album;
-                me.track = obj.track;
-                me.genre = obj.genre;
-                me.albumart = obj.albumArtUrl;
-                me.artistart = obj.artistImageBaseUrl;
-                me.duration = obj.durationMillis;
+                me.title = obj.title || "";
+                me.artist = obj.artist || "";
+                me.album = obj.album || "";
+                me.track = obj.trackNumber || "";
+                me.genre = obj.genre || "";
+                me.albumart = obj.albumArtUrl || "";
+                me.artistart = obj.artistImageBaseUrl || "";
+                me.duration = obj.durationMillis || "";
                 me.minutes = ~~(obj.durationMillis / 60000);
                 me.seconds = ("00" + (obj.durationMillis / 1000) % 60).slice(-2);
 

@@ -7,7 +7,7 @@ from pyramid.response import FileResponse
 from pyramid_beaker import set_cache_regions_from_settings
 from beaker.cache import cache_region
 from sqlalchemy import engine_from_config
-from gmusicapi import Webclient
+from gmusicapi import Mobileclient, Webclient
 
 from .models import (
     DBSession,
@@ -15,7 +15,8 @@ from .models import (
 )
 
 logger = logging.getLogger(__name__)
-gm = Webclient()
+gm = Mobileclient()
+wc = Webclient()
 check_username = lambda: False
 
 
@@ -56,6 +57,10 @@ def main(global_config, **settings):
         settings['gmusicapi_username'] == username and\
         settings['gmusicapi_password'] == password
     if not gm.login(settings['gmusicapi_username'],
+                    settings['gmusicapi_password']):
+        logger.warn("Unable to login to Google Music!")
+        exit()
+    if not wc.login(settings['gmusicapi_username'],
                     settings['gmusicapi_password']):
         logger.warn("Unable to login to Google Music!")
         exit()
