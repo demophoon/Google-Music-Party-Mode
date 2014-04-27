@@ -29,28 +29,31 @@ class _settings(Base):
     value = Column(Text)
 
     @classmethod
-    def set_device_id(this, device_id):
+    def set_option(this, name, value):
         setting = DBSession.query(this).filter(
-            this.name == "device_id"
-        ).first()
-        if setting:
-            setting.value = device_id
-            DBSession.add(setting)
-        else:
-            new_setting = this()
-            new_setting.name = "device_id"
-            new_setting.value = device_id
-            DBSession.add(new_setting)
+            this.name == name
+        ).first() or this()
+        setting.name = name
+        setting.value = value
+        DBSession.add(setting)
         DBSession.flush()
 
     @classmethod
-    def get_device_id(this):
-        device_id = DBSession.query(_settings).filter(
-            _settings.name == "device_id"
+    def get_option(this, name):
+        setting = DBSession.query(_settings).filter(
+            _settings.name == name
         ).first()
-        if device_id:
-            return device_id.value
+        if setting:
+            return setting.value
         return None
+
+    @classmethod
+    def set_device_id(this, device_id):
+        this.set_option("device_id", device_id)
+
+    @classmethod
+    def get_device_id(this):
+        return this.get_option("device_id")
 
 
 class PlayHistory(Base):

@@ -1,5 +1,6 @@
 import logging
 import time
+import urllib
 from tempfile import NamedTemporaryFile
 
 from pyramid.config import Configurator
@@ -12,6 +13,7 @@ from gmusicapi import Mobileclient, Webclient
 from .models import (
     DBSession,
     Base,
+    _settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,9 @@ check_username = lambda: False
 def get_song(song_id):
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.mp3', delete=True)
-    f.write(gm.get_stream_audio(song_id))
+    f.write(urllib.urlopen(
+        gm.get_stream_url(song_id, _settings.get_device_id()[2:])
+    ).read())
     return FileResponse(f.name)
 
 
