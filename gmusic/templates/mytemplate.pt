@@ -304,6 +304,25 @@
                 //sources.push({source: source, start: start_time});
             }
 
+            var last_samples = 0;
+
+            var host = "ws://localhost:9000";
+            var socket = new WebSocket(host);
+            socket.onopen = function() {
+                console.log("Success");
+            }
+            socket.onmessage = function(msg) {
+                console.log(msg);
+            }
+            socket.onclose = function() {
+                console.log("Disconnected");
+            }
+            socket._send = socket.send;
+            socket.send = function(msg) {
+                console.log(msg);
+                socket._send(msg);
+            }
+
             function analyseAudio() {
                 var FFTArray = new Float32Array(1024);
                 analyser.getFloatFrequencyData(FFTArray);
@@ -313,9 +332,26 @@
                 ctx.fillRect(0,0,canvas.width,canvas.height);
                 ctx.globalAlpha = .50;
                 ctx.fillStyle = ViewModel.primaryColor();
+
+                var all_samples = 0;
                 for (var x=0; x<FFTArray.length; x+=1) {
                     // ctx.fillRect((x/FFTArray.length)*canvas.width,canvas.height,FFTArray.length/canvas.width,(FFTArray[x]+200)*-2);
                     ctx.fillRect(100+(x/FFTArray.length)*canvas.width,canvas.height,3,(FFTArray[x]+75)*-2);
+                    all_samples += FFTArray[x];
+                }
+                var result = Math.abs(all_samples - last_samples) / 10;
+                last_samples = all_samples;
+                if (result > 1000) {
+                    var light = 1 + Math.floor(Math.random() * 4);
+                    var r = Math.floor(Math.random() * 2) == 1 ? 255 : 1;
+                    var g = Math.floor(Math.random() * 2) == 1 ? 255 : 1;
+                    var b = Math.floor(Math.random() * 2) == 1 ? 255 : 1;
+                    socket.send(JSON.stringify([light, r, g, b]));
+                } else if (result < 999 && result > 500) {
+                    socket.send(JSON.stringify([5, 1 + Math.floor(Math.random() * 2)]));
+                }
+                if (result < 499 && result > 200) {
+                    socket.send(JSON.stringify([6]));
                 }
             }
 
