@@ -67,12 +67,12 @@ def api_get_all_songs(request):
     items = int(request.params.get("items", 1000))
     songs = []
     songs = get_all_songs()
-    playlist_names = get_all_playlist_ids()
-    for name in playlist_names:
-        for pid in playlist_names[name]:
-            for song in get_playlist_songs(pid):
-                if song not in songs:
-                    songs.append(song)
+    #playlist_names = get_all_playlist_ids()
+    #for name in playlist_names:
+    #    for pid in playlist_names[name]:
+    #        for song in get_playlist_songs(pid):
+    #            if song not in songs:
+    #                songs.append(song)
     return songs[page * items:(page + 1) * items]
 
 
@@ -104,7 +104,7 @@ def api_get_registered_devices(request):
 def api_post_registered_devices(request):
     device_id = request.POST['device_id']
     _settings.set_device_id(device_id)
-    return _settings.device_id
+    return _settings.get_device_id()
 
 
 def includeme(config):

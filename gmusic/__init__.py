@@ -13,7 +13,9 @@ from gmusicapi import Mobileclient, Webclient
 from .models import (
     DBSession,
     Base,
-    _settings,
+    Song,
+    Album,
+    Artist,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,9 +28,7 @@ check_username = lambda: False
 def get_song(song_id):
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.mp3', delete=True)
-    f.write(urllib.urlopen(
-        gm.get_stream_url(song_id, _settings.get_device_id()[2:])
-    ).read())
+    f.write(wc.get_stream_audio(song_id))
     return FileResponse(f.name)
 
 
@@ -50,6 +50,61 @@ def get_all_playlist_ids():
 @cache_region("default_term")
 def get_playlist_songs(playlist_id):
     return gm.get_playlist_songs(playlist_id)
+
+
+def load_songs_into_database():
+    for song in gm.get_all_songs():
+        print "Loading song '%(title)s' on '%(album)s' by '%(artist)s'." % song
+        existing_song = DBSession.query(Song).filter(
+            Song.source == "Google Music"
+        ).filter(
+            Song.location == song.get('id')
+        ).first()
+        existing_album = DBSession.query(Album).filter(
+            Album.name == song.get('album')
+        ).first()
+        existing_artist = DBSession.query(Artist).filter(
+            Artist.name == song.get('artist')
+        ).first()
+        if not existing_artist:
+            new_artist = Artist()
+            new_artist.name = song.get('artist')
+            new_artist.genre = song.get('genre')
+            if len(song.get('artistArtRef', [])) > 0:
+                new_artist.artwork = urllib.urlopen(
+                    song.get('artistArtRef')[0]['url']
+                ).read()
+            DBSession.add(new_artist)
+        if not existing_album:
+            artist = DBSession.query(Artist).filter(
+                Artist.name == song.get('artist')
+            ).first()
+            new_album = Album()
+            new_album.name = song.get('album')
+            new_album.disc_number = song.get('discNumber')
+            new_album.year = song.get('year')
+            new_album.album_artist = song.get('albumArtist')
+            new_album.total_track_count = song.get('totalTrackCount')
+            new_album.artist = artist
+            if len(song.get('albumArtRef', [])) > 0:
+                new_album.artwork = urllib.urlopen(
+                    song.get('albumArtRef')[0]['url']
+                ).read()
+            DBSession.add(new_album)
+        if not existing_song:
+            album = DBSession.query(Album).filter(
+                Album.name == song.get('album')
+            ).first()
+            new_song = Song()
+            new_song.source = "Google Music"
+            new_song.title = song.get('title')
+            new_song.rating = song.get('rating')
+            new_song.track = song.get('trackNumber')
+            new_song.play_count = song.get('playCount')
+            new_song.duration = song.get('durationMillis')
+            new_song.album = album
+            DBSession.add(new_song)
+        DBSession.flush()
 
 
 def main(global_config, **settings):
