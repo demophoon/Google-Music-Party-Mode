@@ -48,6 +48,6 @@ setup(name='gmusic',
       main = gmusic:main
       [console_scripts]
       initialize_gmusic_db = gmusic.scripts.initializedb:main
-      load_songs_gmusic_db = gmusic.scripts.load_db:main
+      load_songs_gmusic_db = gmusic.scripts.load_songs:main
       """,
       )
