@@ -12,6 +12,7 @@ from gmusic import (
     get_all_playlist_ids,
     get_playlist_songs,
     get_song,
+    get_artwork,
     check_username,
     wc,
 )
@@ -85,6 +86,15 @@ def api_get_song(request):
     return False
 
 
+@view_config(route_name='api_get_artwork', renderer="json")
+def api_get_artwork(request):
+    id = request.params.get("song_id")
+    if id:
+        response = get_artwork(id)
+        return response
+    return False
+
+
 @view_config(route_name='home', renderer='templates/mytemplate.pt')
 def index(request):
     return {"device_id": _settings.get_device_id()}
@@ -113,5 +123,6 @@ def includeme(config):
     config.add_route('api_login', '/login')
     config.add_route('api_get_all_songs', '/api/v1/songs')
     config.add_route('api_get_song', '/api/v1/song')
+    config.add_route('api_get_artwork', '/api/v1/artwork')
 
     config.add_route('api_get_registered_devices', '/api/v1/devices')

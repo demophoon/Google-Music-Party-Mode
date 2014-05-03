@@ -32,6 +32,15 @@ def get_song(song_id):
     return FileResponse(f.name)
 
 
+@cache_region("long_term")
+def get_artwork(song_id):
+    f = NamedTemporaryFile(prefix=song_id + str(time.time()),
+                           suffix='.jpg', delete=True)
+    song = DBSession.query(Song).filter(Song.id==song_id).first()
+    f.write(song.album.artwork)
+    return FileResponse(f.name)
+
+
 @cache_region("default_term")
 def get_all_songs():
     return gm.get_all_songs()
@@ -101,7 +110,7 @@ def load_songs_into_database():
             new_song.rating = song.get('rating')
             new_song.track = song.get('trackNumber')
             new_song.play_count = song.get('playCount')
-            new_song.duration = song.get('durationMillis')
+            new_song.duration = int(int(song.get('durationMillis')) / 1000)
             new_song.album = album
             DBSession.add(new_song)
         DBSession.flush()

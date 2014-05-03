@@ -1,3 +1,6 @@
 *.pyc
 dev.ini
+cache/*
 *.sqlite
+gmusic.egg*
+.ropeproject*
