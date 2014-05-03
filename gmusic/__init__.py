@@ -1,8 +1,10 @@
+import sys
 import logging
 import time
 import urllib
 from tempfile import NamedTemporaryFile
 
+import transaction
 from pyramid.config import Configurator
 from pyramid.response import FileResponse
 from pyramid_beaker import set_cache_regions_from_settings
@@ -62,8 +64,21 @@ def get_playlist_songs(playlist_id):
 
 
 def load_songs_into_database():
-    for song in gm.get_all_songs():
-        print "Loading song '%(title)s' on '%(album)s' by '%(artist)s'." % song
+    print "Downloading song list..."
+    songs = gm.get_all_songs()
+    total = len(songs)
+    current_number = 0
+    for song in songs:
+        #print current_number, "/", total
+        sys.stdout.write("\r[%s->%s] - %d%% (%d/%d)" % (
+            "#" * int(current_number/float(total)*25),
+            " " * int(25 - (current_number/float(total)*25)),
+            int(current_number/float(total)*100),
+            current_number,
+            total,
+        ))
+        sys.stdout.flush()
+        current_number += 1
         existing_song = DBSession.query(Song).filter(
             Song.source == "Google Music"
         ).filter(
@@ -115,6 +130,7 @@ def load_songs_into_database():
             new_song.album = album
             DBSession.add(new_song)
         DBSession.flush()
+        transaction.commit()
 
 
 def main(global_config, **settings):
