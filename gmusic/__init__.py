@@ -36,7 +36,7 @@ def get_song(song_id):
 def get_artwork(song_id):
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.jpg', delete=True)
-    song = DBSession.query(Song).filter(Song.id==song_id).first()
+    song = DBSession.query(Song).filter(Song.id == song_id).first()
     f.write(song.album.artwork)
     return FileResponse(f.name)
 
@@ -106,6 +106,7 @@ def load_songs_into_database():
             ).first()
             new_song = Song()
             new_song.source = "Google Music"
+            new_song.location = song.get('id')
             new_song.title = song.get('title')
             new_song.rating = song.get('rating')
             new_song.track = song.get('trackNumber')
