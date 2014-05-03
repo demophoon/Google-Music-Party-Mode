@@ -6,6 +6,7 @@ from functools import wraps
 from pyramid.httpexceptions import HTTPUnauthorized, HTTPFound
 from pyramid.response import Response
 from pyramid.view import view_config
+from sqlalchemy import not_
 
 from gmusic import (
     get_all_songs,
@@ -20,6 +21,7 @@ from .models import (
     DBSession,
     _settings,
     Song,
+    Album,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,6 +69,21 @@ def api_get_all_songs(request):
     page = int(request.params.get("page", 0))
     items = int(request.params.get("items", 1000))
     songs = []
+    songs = [
+        {
+            "id": x.id,
+            "title": x.title,
+            "artist": x.album.artist.name,
+            "album": x.album.name,
+            "track": x.track,
+            "genre": x.album.artist.genre,
+            "duration": x.duration,
+        } for x in DBSession.query(Song).join(
+            Album
+        ).filter(not_(Album.name == "")).all()
+    ]
+    return songs
+    return songs[page * items:(page + 1) * items]
     songs = get_all_songs()
     #playlist_names = get_all_playlist_ids()
     #for name in playlist_names:
@@ -95,7 +112,7 @@ def api_get_artwork(request):
     return False
 
 
-@view_config(route_name='home', renderer='templates/mytemplate.pt')
+@view_config(route_name='home', renderer='templates/player.pt')
 def index(request):
     return {"device_id": _settings.get_device_id()}
 

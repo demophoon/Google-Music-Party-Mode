@@ -192,32 +192,17 @@
             }
 
             function getSongData(pageNumber, songs) {
-                if (pageNumber == undefined || songs == undefined) {
-                    pageNumber = 0;
-                    songs = [];
-                }
                 $.ajax({
                     url: '/api/v1/songs',
-                    data: {
-                        page: pageNumber,
-                        items: 1000,
-                    },
-                    success: function(data) {
-                        for (var x in data) {
-                            songs.push(data[x]);
-                        }
-                        if (data.length == 1000) {
-                            getSongData(pageNumber+1, songs);
-                        } else {
-                            finalSongs = ViewModel.songs();
-                            for (var x in songs) {
-                                if (ViewModel.indexedIds.indexOf(songs[x].storeId) == -1) {
-                                    finalSongs.push(new Song(songs[x]));
-                                    ViewModel.indexedIds.push(songs[x].storeId);
-                                }
+                    success: function(songs) {
+                        finalSongs = ViewModel.songs();
+                        for (var x in songs) {
+                            if (ViewModel.indexedIds.indexOf(songs[x].id) == -1) {
+                                finalSongs.push(new Song(songs[x]));
+                                ViewModel.indexedIds.push(songs[x].id);
                             }
-                            ViewModel.songs(finalSongs);
                         }
+                        ViewModel.songs(finalSongs);
                     }
                 });
             }
@@ -714,11 +699,11 @@
                 me.album = obj.album || "";
                 me.track = obj.trackNumber || "";
                 me.genre = obj.genre || "";
-                me.albumart = obj.albumArtUrl || "";
+                me.albumart = "/api/v1/artwork?song_id=" + me.id;
                 me.artistart = obj.artistImageBaseUrl || "";
-                me.duration = obj.durationMillis || "";
-                me.minutes = ~~(obj.durationMillis / 60000);
-                me.seconds = ("00" + (obj.durationMillis / 1000) % 60).slice(-2);
+                me.duration = obj.duration || "";
+                me.minutes = ~~(obj.duration / 60);
+                me.seconds = ("00" + (obj.duration) % 60).slice(-2);
 
                 me.start = ko.observable(0);
 

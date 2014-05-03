@@ -28,9 +28,11 @@ check_username = lambda: False
 
 @cache_region("long_term")
 def get_song(song_id):
+    song = DBSession.query(Song).filter(Song.id == song_id).first()
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.mp3', delete=True)
-    f.write(wc.get_stream_audio(song_id))
+    if song.source == "Google Music":
+        f.write(wc.get_stream_audio(song.location))
     return FileResponse(f.name)
 
 
@@ -69,7 +71,7 @@ def load_songs_into_database():
     total = len(songs)
     current_number = 0
     for song in songs:
-        #print current_number, "/", total
+        current_number += 1
         sys.stdout.write("\r[%s->%s] - %d%% (%d/%d)" % (
             "#" * int(current_number/float(total)*25),
             " " * int(25 - (current_number/float(total)*25)),
@@ -78,7 +80,6 @@ def load_songs_into_database():
             total,
         ))
         sys.stdout.flush()
-        current_number += 1
         existing_song = DBSession.query(Song).filter(
             Song.source == "Google Music"
         ).filter(
@@ -131,6 +132,7 @@ def load_songs_into_database():
             DBSession.add(new_song)
         DBSession.flush()
         transaction.commit()
+    print " - Complete"
 
 
 def main(global_config, **settings):
