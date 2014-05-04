@@ -163,9 +163,27 @@ def api_get_queue(request):
     request_method="POST")
 def api_post_queue(request):
     action = request.POST.get("action")
+    song_id = request.POST.get("song_id")
+    if not DBSession.query(Song.id).filter(Song.id == song_id).first():
+        request.response.status = 400
+        if song_id:
+            return {"error": "Song does not exist"}
+        return {"error": "Missing parameters"}
     if action == "add":
-        song_id = request.POST.get("song_id")
         queue.append(song_id)
+    elif action == "remove":
+        position = int(request.POST.get("position"))
+        if position < 0 or position >= len(queue):
+            request.response.status = 400
+            return {"error": "Invalid position"}
+        if queue[position] == song_id:
+            del queue[position]
+    elif action == "play_next":
+        queue.insert(1, song_id)
+    elif action == "play_now":
+        queue.insert(1, song_id)
+        if len(queue) > 1:
+            del queue[0]
     return queue
 
 
