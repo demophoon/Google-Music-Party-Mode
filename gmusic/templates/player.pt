@@ -203,6 +203,7 @@
                             }
                         }
                         ViewModel.songs(finalSongs);
+                        ViewModel.updateQueue();
                     }
                 });
             }
@@ -642,6 +643,22 @@
                         return item.status() == "ready";
                     });
                 });
+
+                me.updateQueue = function() {
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        method: "GET",
+                        success: me.createQueue,
+                    });
+                }
+
+                me.createQueue = function(queueData) {
+                    var songs = [];
+                    for (var x in queueData) {
+                        songs.push(me.generate_queue_object(queueData[x]));
+                    }
+                    me.queue(songs);
+                }
 
                 me.scheduledSongs = ko.computed(function() {
                     return ko.utils.arrayFilter(me.songs(), function(item) {
