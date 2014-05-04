@@ -4,14 +4,11 @@ import random
 from functools import wraps
 
 from pyramid.httpexceptions import HTTPUnauthorized, HTTPFound
-from pyramid.response import Response
 from pyramid.view import view_config
 from sqlalchemy import not_
 
 from gmusic import (
     get_all_songs,
-    get_all_playlist_ids,
-    get_playlist_songs,
     get_song,
     get_artwork,
     check_username,
@@ -22,6 +19,7 @@ from .models import (
     _settings,
     Song,
     Album,
+    Artist,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,22 +69,32 @@ def api_get_all_songs(request):
     songs = []
     songs = [
         {
-            "id": x.id,
-            "title": x.title,
-            "artist": x.album.artist.name,
-            "album": x.album.name,
-            "track": x.track,
-            "genre": x.album.artist.genre,
-            "duration": x.duration,
-        } for x in DBSession.query(Song).join(
+            "id": x[0],
+            "title": x[1],
+            "track": x[2],
+            "duration": x[3],
+            "album": x[4],
+            "artist": x[5],
+            "genre": x[6],
+        } for x in DBSession.query(
+            Song.id,
+            Song.title,
+            Song.track,
+            Song.duration,
+            Album.name,
+            Artist.name,
+            Artist.genre,
+        ).join(
             Album
+        ).join(
+            Artist
         ).filter(not_(Album.name == "")).all()
     ]
     return songs
     return songs[page * items:(page + 1) * items]
     songs = get_all_songs()
     #playlist_names = get_all_playlist_ids()
-    #for name in playlist_names:
+    # for name in playlist_names:
     #    for pid in playlist_names[name]:
     #        for song in get_playlist_songs(pid):
     #            if song not in songs:
@@ -122,12 +130,18 @@ def settings(request):
     return {"device_id": _settings.get_device_id()}
 
 
-@view_config(route_name='api_get_registered_devices', renderer="json", request_method="GET")
+@view_config(
+    route_name='api_get_registered_devices',
+    renderer="json",
+    request_method="GET")
 def api_get_registered_devices(request):
     return wc.get_registered_devices()
 
 
-@view_config(route_name='api_get_registered_devices', renderer="json", request_method="POST")
+@view_config(
+    route_name='api_get_registered_devices',
+    renderer="json",
+    request_method="POST")
 def api_post_registered_devices(request):
     device_id = request.POST['device_id']
     _settings.set_device_id(device_id)
