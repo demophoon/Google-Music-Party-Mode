@@ -13,6 +13,7 @@ from gmusic import (
     get_artwork,
     check_username,
     wc,
+    queue,
 )
 from .models import (
     DBSession,
@@ -148,6 +149,26 @@ def api_post_registered_devices(request):
     return _settings.get_device_id()
 
 
+@view_config(
+    route_name='api_queue',
+    renderer="json",
+    request_method="GET")
+def api_get_queue(request):
+    return queue
+
+
+@view_config(
+    route_name='api_queue',
+    renderer="json",
+    request_method="POST")
+def api_post_queue(request):
+    action = request.POST.get("action")
+    if action == "add":
+        song_id = request.POST.get("song_id")
+        queue.append(song_id)
+    return queue
+
+
 def includeme(config):
     config.add_route('home', '/')
     config.add_route('settings', '/settings')
@@ -155,5 +176,7 @@ def includeme(config):
     config.add_route('api_get_all_songs', '/api/v1/songs')
     config.add_route('api_get_song', '/api/v1/song')
     config.add_route('api_get_artwork', '/api/v1/artwork')
+
+    config.add_route('api_queue', '/api/v1/queue')
 
     config.add_route('api_get_registered_devices', '/api/v1/devices')

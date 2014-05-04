@@ -25,6 +25,7 @@ gm = Mobileclient()
 wc = Webclient()
 check_username = lambda: False
 
+queue = []
 
 @cache_region("long_term")
 def get_song(song_id):
