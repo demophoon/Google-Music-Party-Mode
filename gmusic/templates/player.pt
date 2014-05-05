@@ -667,15 +667,43 @@
                 });
 
                 me.skipSong = function() {
-                    volumeDown(me.queue.shift());
+                    var song = me.queue.shift();
+                    volumeDown(song);
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        method: "POST",
+                        data: {
+                            action: "remove",
+                            song_id: song.id,
+                            position: 0,
+                        },
+                        success: me.populateQueue
+                    });
                 }
 
                 me.playNext = function(id) {
-                    me.queue.splice(1, 0, me.generate_queue_object(id));
-                    //me.queue.unshift(me.generate_queue_object(id));
+                    //me.queue.splice(1, 0, me.generate_queue_object(id));
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        method: "POST",
+                        data: {
+                            action: "play_next",
+                            song_id: id,
+                        },
+                        success: me.populateQueue
+                    });
                 }
                 me.addToQueue = function(id) {
-                    me.queue.push(me.generate_queue_object(id));
+                    //me.queue.push(me.generate_queue_object(id));
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        method: "POST",
+                        data: {
+                            action: "add",
+                            song_id: id,
+                        },
+                        success: me.populateQueue
+                    });
                 }
 
                 me.populateQueueFromSearch = function(x) {
@@ -685,6 +713,10 @@
                 }
 
                 me.populateQueue = function(x) {
+                    if ("error" in x) {
+                        console.log(x['error']);
+                        return;
+                    }
                     for (var i=0; i<x; i++) {
                         me.addToQueue(me.songs()[~~(Math.random() * me.songs().length)].id)
                     }
@@ -746,6 +778,7 @@
                 me.status = ko.observable("new");
 
                 me.download = function(callback) {
+                    ViewModel.updateQueue();
                     if (callback !== undefined) {
                         me.afterDownloadCallback = callback;
                     }
@@ -776,9 +809,19 @@
                 }
 
                 me.removeFromQueue = function() {
-                    ViewModel.queue.remove(function(item) {
-                        return item.id == me.id;
-                    });
+                    //$.ajax({
+                    //    url: "/api/v1/queue",
+                    //    method: "POST",
+                    //    data: {
+                    //        action: "remove",
+                    //        song_id: me.id,
+                    //        position: ViewModel.queue().indexOf(me);
+                    //    },
+                    //    success: ViewModel.populateQueue
+                    //});
+                    //ViewModel.queue.remove(function(item) {
+                    //    return item.id == me.id;
+                    //});
                 }
 
                 me.afterDownloadCallback = null;
