@@ -305,8 +305,10 @@
             }
             socket._send = socket.send;
             socket.send = function(msg) {
-                console.log(msg);
-                socket._send(msg);
+                if (socket.readyState == socket.OPEN) {
+                    console.log(msg);
+                    socket._send(msg);
+                }
             }
 
             function analyseAudio() {
@@ -653,6 +655,10 @@
                 }
 
                 me.createQueue = function(queueData) {
+                    if ("error" in queueData) {
+                        console.log(queueData['error']);
+                        return;
+                    }
                     var songs = [];
                     for (var x in queueData) {
                         songs.push(me.generate_queue_object(queueData[x]));
@@ -671,13 +677,13 @@
                     volumeDown(song);
                     $.ajax({
                         url: "/api/v1/queue",
-                        method: "POST",
+                        type: "POST",
                         data: {
                             action: "remove",
                             song_id: song.id,
                             position: 0,
                         },
-                        success: me.populateQueue
+                        success: me.createQueue,
                     });
                 }
 
@@ -685,24 +691,24 @@
                     //me.queue.splice(1, 0, me.generate_queue_object(id));
                     $.ajax({
                         url: "/api/v1/queue",
-                        method: "POST",
+                        type: "POST",
                         data: {
                             action: "play_next",
                             song_id: id,
                         },
-                        success: me.populateQueue
+                        success: me.createQueue,
                     });
                 }
                 me.addToQueue = function(id) {
                     //me.queue.push(me.generate_queue_object(id));
                     $.ajax({
                         url: "/api/v1/queue",
-                        method: "POST",
+                        type: "POST",
                         data: {
                             action: "add",
                             song_id: id,
                         },
-                        success: me.populateQueue
+                        success: me.createQueue,
                     });
                 }
 
@@ -713,10 +719,6 @@
                 }
 
                 me.populateQueue = function(x) {
-                    if ("error" in x) {
-                        console.log(x['error']);
-                        return;
-                    }
                     for (var i=0; i<x; i++) {
                         me.addToQueue(me.songs()[~~(Math.random() * me.songs().length)].id)
                     }
@@ -778,11 +780,11 @@
                 me.status = ko.observable("new");
 
                 me.download = function(callback) {
-                    ViewModel.updateQueue();
                     if (callback !== undefined) {
                         me.afterDownloadCallback = callback;
                     }
                     if (me.buffer === null && me.status() == "new") {
+                        ViewModel.updateQueue();
                         me.status("downloading");
                         var request = new XMLHttpRequest();
                         request.open('GET', url + "?song_id=" + me.id, true);
@@ -809,16 +811,17 @@
                 }
 
                 me.removeFromQueue = function() {
-                    //$.ajax({
-                    //    url: "/api/v1/queue",
-                    //    method: "POST",
-                    //    data: {
-                    //        action: "remove",
-                    //        song_id: me.id,
-                    //        position: ViewModel.queue().indexOf(me);
-                    //    },
-                    //    success: ViewModel.populateQueue
-                    //});
+                    var position = ViewModel.queue().indexOf(me);
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        type: "POST",
+                        data: {
+                            action: "remove",
+                            song_id: me.id,
+                            position: position,
+                        },
+                        success: ViewModel.updateQueue,
+                    });
                     //ViewModel.queue.remove(function(item) {
                     //    return item.id == me.id;
                     //});
@@ -827,8 +830,20 @@
                 me.afterDownloadCallback = null;
 
                 me.playNow = function() {
-                    ViewModel.queue.shift();
-                    ViewModel.queue.unshift(me);
+                    $.ajax({
+                        url: "/api/v1/queue",
+                        type: "POST",
+                        data: {
+                            action: "play_now",
+                            song_id: me.id,
+                        },
+                        success: ViewModel.updateQueue,
+                        //success: function(data) {
+                        //    ViewModel.queue.shift();
+                        //    ViewModel.queue.unshift(me);
+                        //    ViewModel.updateQueue(data);
+                        //},
+                    });
                 }
 
                 me.pauseOffset = 0;

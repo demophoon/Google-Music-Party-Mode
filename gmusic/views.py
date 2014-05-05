@@ -154,6 +154,7 @@ def api_post_registered_devices(request):
     renderer="json",
     request_method="GET")
 def api_get_queue(request):
+    global queue
     return queue
 
 
@@ -162,6 +163,7 @@ def api_get_queue(request):
     renderer="json",
     request_method="POST")
 def api_post_queue(request):
+    global queue
     action = request.POST.get("action")
     song_id = request.POST.get("song_id")
     if not DBSession.query(Song.id).filter(Song.id == song_id).first():
