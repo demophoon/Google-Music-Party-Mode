@@ -23,10 +23,13 @@ class MusicClient():
         ).first()
 
     def get_current_time(self):
-        return time.time() - self.start_time
+        if self.status == "playing":
+            return time.time() - self.start_time
+        return self.position
 
     def play(self):
         if len(self._queue) <= 0:
+            self.status = "stopped"
             return
         if not self.current_song:
             self.current_song = self._queue[0]
@@ -38,9 +41,6 @@ class MusicClient():
                 self.next_song
             )
             self._timer.start()
-            print "=============="
-            print self.get_current_song().duration - self.position
-            print "=============="
 
     def pause(self):
         if self.status is "playing":
@@ -49,11 +49,12 @@ class MusicClient():
             self.position = self.get_current_time()
 
     def next_song(self):
+        self.status = "stopped"
         if len(self._queue) <= 0:
-            self.status = "stopped"
             return
         self.position = 0
-        self.current_song = self._queue.pop(0)
+        self._queue.pop(0)
+        self.current_song = self._queue[0]
         self.start_time = time.time()
         self.play()
 
@@ -61,7 +62,7 @@ class MusicClient():
         self._queue.append(song_id)
 
     def remove_from_queue(self, position):
-        self._queue[position]
+        del self._queue[position]
 
     def play_next_in_queue(self, song_id):
         self._queue.insert(1, song_id)
@@ -72,7 +73,13 @@ class MusicClient():
             self.remove_from_queue(0)
 
     @property
+    def duration(self):
+        song = self.get_current_song()
+        if song:
+            return song.duration
+        return 0
+
+    @property
     def queue(self):
         self.play()
-        print self.status, self.get_current_time()
         return self._queue

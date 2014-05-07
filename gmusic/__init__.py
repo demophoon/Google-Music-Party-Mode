@@ -40,7 +40,6 @@ def get_song(song_id):
     return FileResponse(f.name)
 
 
-@cache_region("long_term")
 def get_artwork(song_id):
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.jpg', delete=True)

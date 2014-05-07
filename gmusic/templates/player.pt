@@ -268,25 +268,34 @@
                         volumeDown(sources.pop());
                     }
                 }
-                if (offset === undefined) {
-                    offset = 0;
+                if (offset === undefined && delay_play === 0) {
+                    $.ajax({
+                        url: "/api/v1/status",
+                        method: "GET",
+                        success: function(data) {
+                            offset = data.position;
+                            song.sourceNode = context.createBufferSource();
+                            song.sourceNode.buffer = song.buffer;
+                            song.sourceNode.connect(analyser);
+                            song.sourceNode.onended = function() {
+                                song.sourceNode.disconnect();
+                                song.sourceNode = null;
+                                if (song.status() != "paused") {
+                                    ViewModel.queue.shift();
+                                    song.status("ready");
+                                }
+                            }
+                            if (song.status() != "playing") {
+                                console.log(offset);
+                                song.sourceNode.start(context.currentTime + delay_play, offset);
+                                song.status("playing");
+                                var start_time = context.currentTime + delay_play - offset;
+                                song.start(start_time);
+                                sources.push(song)
+                            }
+                        },
+                    });
                 }
-                song.sourceNode = context.createBufferSource();
-                song.sourceNode.buffer = song.buffer;
-                song.sourceNode.connect(analyser);
-                song.sourceNode.onended = function() {
-                    song.sourceNode.disconnect();
-                    song.sourceNode = null;
-                    if (song.status() != "paused") {
-                        ViewModel.queue.shift();
-                        song.status("ready");
-                    }
-                }
-                song.sourceNode.start(context.currentTime + delay_play, offset);
-                song.status("playing");
-                var start_time = context.currentTime + delay_play - offset;
-                song.start(start_time);
-                sources.push(song)
                 //sources.push({source: source, start: start_time});
             }
 
@@ -748,7 +757,7 @@
                 me.title = obj.title || "";
                 me.artist = obj.artist || "";
                 me.album = obj.album || "";
-                me.track = obj.trackNumber || "";
+                me.track = obj.track || "";
                 me.genre = obj.genre || "";
                 me.albumart = "/api/v1/artwork?song_id=" + me.id;
                 me.artistart = obj.artistImageBaseUrl || "";

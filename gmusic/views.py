@@ -185,6 +185,19 @@ def api_post_queue(request):
     return local_client.queue
 
 
+@view_config(
+    route_name='api_player_status',
+    renderer="json",
+    request_method="GET")
+def api_get_player_status(request):
+    return {
+        "start_time": local_client.start_time,
+        "position": local_client.get_current_time(),
+        "status": local_client.status,
+        "duration": local_client.duration,
+    }
+
+
 def includeme(config):
     config.add_route('home', '/')
     config.add_route('settings', '/settings')
@@ -194,5 +207,6 @@ def includeme(config):
     config.add_route('api_get_artwork', '/api/v1/artwork')
 
     config.add_route('api_queue', '/api/v1/queue')
+    config.add_route('api_player_status', '/api/v1/status')
 
     config.add_route('api_get_registered_devices', '/api/v1/devices')
