@@ -12,6 +12,10 @@ from beaker.cache import cache_region
 from sqlalchemy import engine_from_config
 from gmusicapi import Mobileclient, Webclient
 
+from .client import (
+    MusicClient
+)
+
 from .models import (
     DBSession,
     Base,
@@ -25,7 +29,6 @@ gm = Mobileclient()
 wc = Webclient()
 check_username = lambda: False
 
-queue = []
 
 @cache_region("long_term")
 def get_song(song_id):
@@ -134,6 +137,8 @@ def load_songs_into_database():
         DBSession.flush()
         transaction.commit()
     print " - Complete"
+
+local_client = MusicClient()
 
 
 def main(global_config, **settings):

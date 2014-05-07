@@ -13,7 +13,7 @@ from gmusic import (
     get_artwork,
     check_username,
     wc,
-    queue,
+    local_client,
 )
 from .models import (
     DBSession,
@@ -154,8 +154,7 @@ def api_post_registered_devices(request):
     renderer="json",
     request_method="GET")
 def api_get_queue(request):
-    global queue
-    return queue
+    return local_client.queue
 
 
 @view_config(
@@ -163,7 +162,6 @@ def api_get_queue(request):
     renderer="json",
     request_method="POST")
 def api_post_queue(request):
-    global queue
     action = request.POST.get("action")
     song_id = request.POST.get("song_id")
     if not DBSession.query(Song.id).filter(Song.id == song_id).first():
@@ -172,21 +170,19 @@ def api_post_queue(request):
             return {"error": "Song does not exist"}
         return {"error": "Missing parameters"}
     if action == "add":
-        queue.append(song_id)
+        local_client.add_to_queue(song_id)
     elif action == "remove":
         position = int(request.POST.get("position"))
-        if position < 0 or position >= len(queue):
+        if position < 0 or position >= len(local_client.queue):
             request.response.status = 400
             return {"error": "Invalid position"}
-        if queue[position] == song_id:
-            del queue[position]
+        if local_client.queue[position] == song_id:
+            local_client.remove_from_queue(position)
     elif action == "play_next":
-        queue.insert(1, song_id)
+        local_client.play_next_in_queue(song_id)
     elif action == "play_now":
-        queue.insert(1, song_id)
-        if len(queue) > 1:
-            del queue[0]
-    return queue
+        local_client.play_now_in_queue(song_id)
+    return local_client.queue
 
 
 def includeme(config):
