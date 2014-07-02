@@ -87,7 +87,7 @@ class Album(Base):
     year = Column(Integer)
     album_artist = Column(Text)
     total_track_count = Column(Integer)
-    artwork = Column(LargeBinary)
+    artwork = Column(Text)
 
     artist_id = Column(Integer, ForeignKey("artist.id"))
     artist = relationship("Artist", backref="albums")

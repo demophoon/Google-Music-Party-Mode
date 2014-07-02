@@ -1,4 +1,5 @@
 import sys
+import os
 import logging
 import time
 import urllib
@@ -44,7 +45,10 @@ def get_artwork(song_id):
     f = NamedTemporaryFile(prefix=song_id + str(time.time()),
                            suffix='.jpg', delete=True)
     song = DBSession.query(Song).filter(Song.id == song_id).first()
-    f.write(song.album.artwork)
+    #if.write(song.album.artwork)
+    art = open(song.album.artwork, "r")
+    f.write(art.read())
+    art.close()
     return FileResponse(f.name)
 
 
@@ -69,6 +73,7 @@ def get_playlist_songs(playlist_id):
 
 
 def load_songs_into_database():
+    artwork_dir = "./artwork/"
     print "Downloading song list..."
     songs = gm.get_all_songs()
     total = len(songs)
@@ -114,10 +119,20 @@ def load_songs_into_database():
             new_album.album_artist = song.get('albumArtist')
             new_album.total_track_count = song.get('totalTrackCount')
             new_album.artist = artist
+            DBSession.flush()
+
             if len(song.get('albumArtRef', [])) > 0:
-                new_album.artwork = urllib.urlopen(
-                    song.get('albumArtRef')[0]['url']
-                ).read()
+                if not os.path.exists(artwork_dir):
+                    os.makedirs(artwork_dir)
+                file_path = "%s%d.jpg" % (artwork_dir, new_album.id)
+                if not os.path.isfile(file_path):
+                    f = open(file_path, "w")
+                    f.write(urllib.urlopen(
+                        song.get('albumArtRef')[0]['url']
+                    ).read())
+                    f.close()
+                new_album.artwork = file_path
+
             DBSession.add(new_album)
         if not existing_song:
             album = DBSession.query(Album).filter(

@@ -1,4 +1,3 @@
-import threading
 import time
 
 from .models import (
@@ -15,7 +14,6 @@ class MusicClient():
         self.start_time = 0
         self.position = 0
         self._queue = []
-        self._timer = None
 
     def get_current_song(self):
         return DBSession.query(Song).filter(
@@ -23,9 +21,14 @@ class MusicClient():
         ).first()
 
     def get_current_time(self):
+        ctime = self.position
         if self.status == "playing":
-            return time.time() - self.start_time
-        return self.position
+            ctime = time.time() - self.start_time
+        if ctime > self.duration:
+            self._queue.pop(0)
+            self.current_song = self._queue[0]
+            ctime = 0
+        return ctime
 
     def play(self):
         if len(self._queue) <= 0:
@@ -36,16 +39,10 @@ class MusicClient():
         if self.status is not "playing":
             self.status = "playing"
             self.start_time = time.time()
-            self._timer = threading.Timer(
-                self.get_current_song().duration - self.position,
-                self.next_song
-            )
-            self._timer.start()
 
     def pause(self):
         if self.status is "playing":
             self.status = "paused"
-            self._timer.cancel()
             self.position = self.get_current_time()
 
     def next_song(self):
