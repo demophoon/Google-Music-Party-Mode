@@ -25,8 +25,9 @@ class MusicClient():
         if self.status == "playing":
             ctime = time.time() - self.start_time
         if ctime > self.duration:
-            self._queue.pop(0)
-            self.current_song = self._queue[0]
+            if len(self._queue) > 0:
+                self._queue.pop(0)
+                self.current_song = self._queue[0]
             ctime = 0
         return ctime
 

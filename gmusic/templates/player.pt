@@ -246,8 +246,8 @@
 
             var volumeDown = function(song) {
                 if (song.sourceNode) {
-                    song.sourceNode.gain.value -= .05;
-                    if (song.sourceNode.gain.value > 0) {
+                    song.gainNode.gain.value -= .05;
+                    if (song.gainNode.gain.value > 0) {
                         setTimeout(function() { volumeDown(song);}, 50);
                     } else {
                         song.sourceNode.disconnect();
@@ -276,7 +276,10 @@
                             offset = data.position;
                             song.sourceNode = context.createBufferSource();
                             song.sourceNode.buffer = song.buffer;
-                            song.sourceNode.connect(analyser);
+                            song.gainNode = context.createGain();
+                            song.gainNode.gain.value = 1;
+                            song.gainNode.connect(analyser);
+                            song.sourceNode.connect(song.gainNode);
                             song.sourceNode.onended = function() {
                                 song.sourceNode.disconnect();
                                 song.sourceNode = null;
@@ -302,22 +305,28 @@
             var last_samples = 0;
 
             var host = "ws://localhost:9000";
-            var socket = new WebSocket(host);
-            socket.onopen = function() {
-                console.log("Success");
-            }
-            socket.onmessage = function(msg) {
-                console.log(msg);
-            }
-            socket.onclose = function() {
-                console.log("Disconnected");
-            }
-            socket._send = socket.send;
-            socket.send = function(msg) {
-                if (socket.readyState == socket.OPEN) {
-                    console.log(msg);
-                    socket._send(msg);
+            var socket;
+
+            function connect_to_ws_server() {
+                socket = new WebSocket(host);
+                socket.onopen = function() {
+                    console.log("Success");
                 }
+                socket.onmessage = function(msg) {
+                    console.log(msg);
+                }
+                socket.onclose = function() {
+                    console.log("Disconnected");
+                    setTimeout(connect_to_ws_server, 1000);
+                }
+                socket._send = socket.send;
+                socket.send = function(msg) {
+                    if (socket.readyState == socket.OPEN) {
+                        console.log(msg);
+                        socket._send(msg);
+                    }
+                }
+
             }
 
             function analyseAudio() {
@@ -786,6 +795,7 @@
 
                 me.buffer = null;
                 me.sourceNode = null;
+                me.gainNode = null;
                 me.status = ko.observable("new");
 
                 me.download = function(callback) {
